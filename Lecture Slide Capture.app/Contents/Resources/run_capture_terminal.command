@@ -193,7 +193,7 @@ choose_window_id_text() {
   local reply=""
   while true; do
     show_window_list
-    read -r -p "창 ID를 입력하세요. Enter=자동 선택, r=목록 새로고침, q=취소: " reply || reply="q"
+    read -r -p "창 번호 또는 창 ID를 입력하세요. Enter=자동 선택, r=목록 새로고침, q=취소: " reply || reply="q"
     case "$reply" in
       "")
         printf '%s' ""
@@ -211,7 +211,7 @@ choose_window_id_text() {
           printf '%s' "$reply"
           return 0
         fi
-        echo "[안내] 숫자 창 ID를 입력하거나 Enter를 누르세요." >&2
+        echo "[안내] 숫자 후보 번호 또는 실제 창 ID를 입력하거나 Enter를 누르세요." >&2
         ;;
     esac
   done

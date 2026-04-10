@@ -1857,12 +1857,27 @@ def resolve_target_window(
     choose_window: bool = False,
 ) -> Dict[str, Any]:
     if explicit_window_id is not None:
+        explicit_window_id = int(explicit_window_id)
         all_windows = list_candidate_windows(None, None)
         for item in all_windows:
-            if int(item["window_id"]) == int(explicit_window_id):
+            if int(item["window_id"]) == explicit_window_id:
                 return item
+
+        filtered_candidates = list_candidate_windows(owner_filter, title_filter)
+        if not filtered_candidates and owner_filter == "Google Chrome":
+            # Be slightly more forgiving for Chromium-based variants.
+            filtered_candidates = list_candidate_windows("Chrome", title_filter)
+
+        if 1 <= explicit_window_id <= len(filtered_candidates):
+            chosen = filtered_candidates[explicit_window_id - 1]
+            print(
+                f"[window] 입력값 {explicit_window_id} 을(를) 후보 번호로 해석해 "
+                f"창 ID {chosen['window_id']} 를 선택합니다."
+            )
+            return chosen
+
         return {
-            "window_id": int(explicit_window_id),
+            "window_id": explicit_window_id,
             "window_owner": owner_filter or "",
             "window_title": title_filter or "",
             "left": 0,
@@ -1948,7 +1963,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--window-id",
         type=int,
         default=None,
-        help="macOS window 모드에서 대상 창 ID 직접 지정",
+        help="macOS window 모드에서 대상 창 ID 직접 지정. 후보 목록 번호(1, 2, 3...)도 허용",
     )
     parser.add_argument(
         "--choose-window",
