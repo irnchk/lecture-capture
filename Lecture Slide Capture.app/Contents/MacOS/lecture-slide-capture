@@ -1,0 +1,30 @@
+#!/bin/bash
+set -u
+
+APP_CONTENTS="$(cd "$(dirname "$0")/.." && pwd)"
+RES_DIR="$APP_CONTENTS/Resources"
+TERM_SCRIPT="$RES_DIR/run_capture_terminal.command"
+LOG_DIR="$HOME/Library/Logs/LectureSlideCapture"
+LOG_PATH="$LOG_DIR/app_launcher.log"
+
+mkdir -p "$LOG_DIR"
+{
+  echo "=============================="
+  date '+%Y-%m-%d %H:%M:%S launcher start'
+  echo "APP_CONTENTS=$APP_CONTENTS"
+  echo "TERM_SCRIPT=$TERM_SCRIPT"
+} >> "$LOG_PATH" 2>&1
+
+if [[ ! -e "$TERM_SCRIPT" ]]; then
+  echo "[launcher] terminal script not found" >> "$LOG_PATH" 2>&1
+  exit 1
+fi
+
+if [[ ! -x "$TERM_SCRIPT" ]]; then
+  chmod +x "$TERM_SCRIPT" >> "$LOG_PATH" 2>&1 || true
+fi
+
+/usr/bin/open "$TERM_SCRIPT" >> "$LOG_PATH" 2>&1
+STATUS=$?
+echo "[launcher] open status=$STATUS" >> "$LOG_PATH" 2>&1
+exit "$STATUS"
