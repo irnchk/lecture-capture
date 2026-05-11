@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import ctypes
 import io
 import os
 import platform
@@ -21,38 +22,100 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 
-APP_CONTENTS = Path(__file__).resolve().parent.parent
-RES_DIR = APP_CONTENTS / "Resources"
+APP_ID = "LectureSlideCapture"
+SCRIPT_PATH = Path(__file__).resolve()
+if getattr(sys, "frozen", False):
+    RES_DIR = Path(getattr(sys, "_MEIPASS", SCRIPT_PATH.parent))
+    APP_CONTENTS = RES_DIR.parent
+else:
+    RES_DIR = SCRIPT_PATH.parent
+    APP_CONTENTS = RES_DIR.parent
 REQ_PATH = RES_DIR / "requirements.txt"
-CONFIG_DIR = Path.home() / "Library" / "Application Support" / "LectureSlideCapture"
+
+
+def platform_config_dir() -> Path:
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
+        return base / APP_ID
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APP_ID
+    return Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")) / APP_ID
+
+
+def platform_log_dir() -> Path:
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or (Path.home() / "AppData" / "Local"))
+        return base / APP_ID / "Logs"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Logs" / APP_ID
+    return Path(os.environ.get("XDG_STATE_HOME") or (Path.home() / ".local" / "state")) / APP_ID / "logs"
+
+
+CONFIG_DIR = platform_config_dir()
 OUTPUT_BASE_FILE = CONFIG_DIR / "output_base.txt"
-DEFAULT_OUTPUT_BASE = Path.home() / ".hermes" / "workspace" / "NoteSources"
-LOG_DIR = Path.home() / "Library" / "Logs" / "LectureSlideCapture"
+DEFAULT_OUTPUT_BASE = (
+    Path.home() / "Documents" / "Lecture Slide Capture"
+    if sys.platform == "win32"
+    else Path.home() / ".hermes" / "workspace" / "NoteSources"
+)
+LOG_DIR = platform_log_dir()
 GUI_LOG_PATH = LOG_DIR / "gui_session.log"
 
-REQUIRED_MODULES = [
+BASE_REQUIRED_MODULES = [
     "cv2",
     "mss",
     "skimage",
     "PIL",
     "img2pdf",
     "numpy",
-    "Quartz",
-    "Cocoa",
 ]
 
-RUNTIME_IMPORT_MODULES = [
+MAC_REQUIRED_MODULES = [
+    "Quartz",
+    "AppKit",
+    "Foundation",
+    "ScreenCaptureKit",
+]
+
+BASE_RUNTIME_IMPORT_MODULES = [
     "cv2",
     "numpy",
     "mss",
     "skimage.metrics",
     "PIL",
     "img2pdf",
-    "Quartz",
-    "AppKit",
-    "Foundation",
-    "ScreenCaptureKit",
 ]
+
+
+def required_modules() -> list[str]:
+    if sys.platform == "darwin":
+        return [*BASE_REQUIRED_MODULES, *MAC_REQUIRED_MODULES]
+    return list(BASE_REQUIRED_MODULES)
+
+
+def runtime_import_modules() -> list[str]:
+    if sys.platform == "darwin":
+        return [*BASE_RUNTIME_IMPORT_MODULES, *MAC_REQUIRED_MODULES]
+    return list(BASE_RUNTIME_IMPORT_MODULES)
+
+
+def enable_windows_dpi_awareness() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        return
+    except Exception:
+        pass
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        return
+    except Exception:
+        pass
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 COMMON_PYTHON_CANDIDATES = [
     "/usr/local/bin/python3",
@@ -84,14 +147,19 @@ def save_output_base(value: Path) -> None:
 
 
 def discover_missing_modules() -> list[str]:
+    if getattr(sys, "frozen", False):
+        return []
+
     missing: list[str] = []
-    for module_name in REQUIRED_MODULES:
+    for module_name in required_modules():
         if importlib.util.find_spec(module_name) is None:
             missing.append(module_name)
     return missing
 
 
 def arm64_machine_available() -> bool:
+    if sys.platform != "darwin":
+        return False
     try:
         result = subprocess.run(
             ["/usr/bin/arch", "-arm64", "/usr/bin/true"],
@@ -112,7 +180,7 @@ def probe_python_runtime(python_bin: str, force_arm64: bool = False) -> Optional
                 "import json",
                 "import platform",
                 "import sys",
-                f"mods = {RUNTIME_IMPORT_MODULES!r}",
+                f"mods = {runtime_import_modules()!r}",
                 "failures = {}",
                 "for name in mods:",
                 "    try:",
@@ -170,6 +238,9 @@ def candidate_python_bins() -> list[str]:
 
 
 def maybe_reexec_with_usable_python() -> bool:
+    if sys.platform != "darwin":
+        return False
+
     if os.environ.get("LECTURE_SLIDE_CAPTURE_REEXEC") == "1":
         return False
 
@@ -219,8 +290,12 @@ def get_python_bin() -> str:
 
 
 def build_install_command() -> str:
-    base_command = f"{get_python_bin()} -m pip install --user -r \"{REQ_PATH}\""
-    if arm64_machine_available():
+    command_parts = [get_python_bin(), "-m", "pip", "install", "--user", "-r", str(REQ_PATH)]
+    if sys.platform == "win32":
+        return subprocess.list2cmdline(command_parts)
+
+    base_command = " ".join(shlex.quote(part) for part in command_parts)
+    if sys.platform == "darwin" and arm64_machine_available():
         return f"/usr/bin/arch -arm64 {base_command}"
     return base_command
 
@@ -406,8 +481,25 @@ read -r -p "엔터를 누르면 이 창을 닫습니다..." _
 
 
 def open_install_command_in_terminal(install_command: str, missing_text: str) -> None:
+    if sys.platform == "win32":
+        subprocess.Popen(["cmd.exe", "/k", install_command])
+        return
+    if sys.platform != "darwin":
+        subprocess.Popen(["sh", "-lc", install_command])
+        return
+
     script_path = write_install_terminal_script(install_command, missing_text)
     subprocess.Popen(["open", str(script_path)])
+
+
+def open_path(path: Path) -> None:
+    if sys.platform == "win32":
+        os.startfile(str(path))  # type: ignore[attr-defined]
+        return
+    if sys.platform == "darwin":
+        subprocess.run(["open", str(path)], check=False)
+        return
+    subprocess.run(["xdg-open", str(path)], check=False)
 
 
 def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, clipboard_ready: bool) -> None:
@@ -771,6 +863,8 @@ class CaptureApp:
 
         self.root = root
         self.sc = capture_module
+        self.window_mode_supported = bool(getattr(self.sc, "WINDOW_CAPTURE_SUPPORTED", False))
+        self.window_backend_choices = tuple(getattr(self.sc, "WINDOW_BACKEND_CHOICES", ("auto",)))
         self.Image = Image
         self.ImageDraw = ImageDraw
         self.ImageTk = ImageTk
@@ -810,8 +904,8 @@ class CaptureApp:
         sys.stdout = GuiLogStream(self.log_queue, self.log_file, self.original_stdout)
         sys.stderr = GuiLogStream(self.log_queue, self.log_file, self.original_stderr)
 
-        self.source_mode_var = tk.StringVar(value="window")
-        self.window_owner_var = tk.StringVar(value="Google Chrome")
+        self.source_mode_var = tk.StringVar(value="window" if self.window_mode_supported else "screen")
+        self.window_owner_var = tk.StringVar(value=str(getattr(self.sc, "DEFAULT_WINDOW_OWNER", "Google Chrome")))
         self.window_title_var = tk.StringVar(value="")
         self.window_backend_var = tk.StringVar(value="auto")
         self.output_base_var = tk.StringVar(value=str(load_output_base()))
@@ -1077,7 +1171,7 @@ class CaptureApp:
         self.backend_combo = ttk.Combobox(
             source_group,
             textvariable=self.window_backend_var,
-            values=("auto", "screencapturekit", "coregraphics"),
+            values=self.window_backend_choices,
             state="readonly",
         )
         self.backend_combo.grid(row=3, column=1, sticky="ew", pady=(8, 0))
@@ -1385,7 +1479,7 @@ class CaptureApp:
         self.finish_button.configure(state="disabled")
 
     def _open_image_path(self, path: Path) -> None:
-        subprocess.run(["open", str(path)], check=False)
+        open_path(path)
 
     def _refresh_gallery_canvas(self, _event: Optional[tk.Event] = None) -> None:
         if self.gallery_canvas is None or self.gallery_inner is None:
@@ -1471,7 +1565,7 @@ class CaptureApp:
                 justify="left",
                 wraplength=260,
             ).grid(row=1, column=0, sticky="w", pady=(8, 0))
-            ttk.Button(card, text="Finder에서 열기", command=lambda p=path: self._open_image_path(p)).grid(
+            ttk.Button(card, text="파일 열기", command=lambda p=path: self._open_image_path(p)).grid(
                 row=2, column=0, sticky="w", pady=(8, 0)
             )
 
@@ -1628,17 +1722,21 @@ class CaptureApp:
             self.output_base_var.set(chosen)
 
     def _sync_source_mode_ui(self) -> None:
+        if not self.window_mode_supported and self.source_mode_var.get() == "window":
+            self.source_mode_var.set("screen")
         is_window_mode = self.source_mode_var.get() == "window"
-        state = "normal" if is_window_mode else "disabled"
-        readonly_state = "readonly" if is_window_mode else "disabled"
+        window_controls_enabled = is_window_mode and self.window_mode_supported
+        state = "normal" if window_controls_enabled else "disabled"
+        readonly_state = "readonly" if window_controls_enabled else "disabled"
         for widget in (self.owner_entry, self.title_entry, self.refresh_button):
             widget.configure(state=state)
         self.backend_combo.configure(state=readonly_state)
         self.window_listbox.configure(state=state)
         if hasattr(self, "window_mode_button") and hasattr(self, "screen_mode_button"):
+            self.window_mode_button.configure(state="normal" if self.window_mode_supported else "disabled")
             self.window_mode_button.configure(
-                bg=self.palette["accent_light"] if is_window_mode else "#ffffff",
-                fg=self.palette["accent_dark"] if is_window_mode else self.palette["text"],
+                bg=self.palette["accent_light"] if window_controls_enabled else "#ffffff",
+                fg=self.palette["accent_dark"] if window_controls_enabled else self.palette["muted"],
             )
             self.screen_mode_button.configure(
                 bg=self.palette["accent_light"] if not is_window_mode else "#ffffff",
@@ -1658,6 +1756,11 @@ class CaptureApp:
 
     def _refresh_windows(self) -> None:
         if self.source_mode_var.get() != "window":
+            return
+        if not self.window_mode_supported:
+            self.window_candidates = []
+            self.window_listbox.delete(0, "end")
+            self.selection_summary_var.set("이 플랫폼에서는 창 고정 캡처를 사용할 수 없습니다. 화면 영역 직접 캡처를 사용하세요.")
             return
         try:
             owner_filter = self.window_owner_var.get().strip() or None
@@ -1743,11 +1846,14 @@ class CaptureApp:
         self.root.update()
         try:
             if self.source_mode_var.get() == "window":
+                if not self.window_mode_supported:
+                    messagebox.showinfo("창 캡처", "이 플랫폼에서는 창 고정 캡처를 사용할 수 없습니다.", parent=self.root)
+                    return
                 candidate = self._current_window_candidate()
                 if candidate is None:
                     messagebox.showinfo("대상 창 선택", "먼저 캡처할 창을 선택해 주세요.", parent=self.root)
                     return
-                source = self.sc.MacWindowSource(
+                source = self.sc.create_window_source(
                     window_id=int(candidate["window_id"]),
                     window_owner=str(candidate["window_owner"]),
                     window_title=str(candidate["window_title"]),
@@ -1762,7 +1868,7 @@ class CaptureApp:
                     self.root,
                     preview,
                     "창 내부 슬라이드 영역 선택",
-                    "Chrome 창 스냅샷에서 슬라이드 영역만 드래그해 선택하세요.",
+                    "선택한 창 스냅샷에서 슬라이드 영역만 드래그해 선택하세요.",
                 )
                 roi = dialog.show()
                 if roi is None:
@@ -1868,12 +1974,14 @@ class CaptureApp:
 
     def _create_capture_source(self, output_dir: Path) -> Any:
         if self.source_mode_var.get() == "window":
+            if not self.window_mode_supported:
+                raise RuntimeError("이 플랫폼에서는 창 고정 캡처를 사용할 수 없습니다. 화면 영역 직접 캡처를 사용하세요.")
             candidate = self._current_window_candidate()
             if candidate is None:
                 raise RuntimeError("캡처할 창을 선택해 주세요.")
             if self.window_selection is None or self.window_selection.window.get("window_id") != candidate.get("window_id"):
                 raise RuntimeError("선택한 창에 대해 슬라이드 영역을 먼저 지정해 주세요.")
-            source = self.sc.MacWindowSource(
+            source = self.sc.create_window_source(
                 window_id=int(candidate["window_id"]),
                 window_owner=str(candidate["window_owner"]),
                 window_title=str(candidate["window_title"]),
@@ -1957,7 +2065,7 @@ class CaptureApp:
 
     def _open_session_folder(self) -> None:
         target = self.output_dir or normalize_output_base(self.output_base_var.get())
-        subprocess.run(["open", str(target)], check=False)
+        open_path(target)
 
     def _handle_capture_finished(self) -> None:
         if self.finish_handled:
@@ -2068,6 +2176,7 @@ def import_capture_module() -> Any:
 
 
 def main() -> None:
+    enable_windows_dpi_awareness()
     maybe_reexec_with_usable_python()
     print(f"[gui-start] executable={sys.executable}")
     root = tk.Tk()

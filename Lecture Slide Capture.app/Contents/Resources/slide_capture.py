@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import csv
 import json
 import re
@@ -55,6 +56,15 @@ else:  # pragma: no cover - platform guard
     ScreenCaptureKit = None
 
 
+IS_MACOS = sys.platform == "darwin"
+IS_WINDOWS = sys.platform == "win32"
+WINDOW_CAPTURE_SUPPORTED = (IS_MACOS and Quartz is not None and AppKit is not None) or IS_WINDOWS
+WINDOW_BACKEND_CHOICES = (
+    ("auto", "screencapturekit", "coregraphics")
+    if IS_MACOS
+    else (("auto", "win32-mss") if IS_WINDOWS else ("auto",))
+)
+DEFAULT_WINDOW_OWNER = "Google Chrome"
 PREVIEW_WINDOW_NAME = "Slide Capture Preview"
 
 
@@ -189,7 +199,41 @@ class CaptureUnavailableError(RuntimeError):
     """Raised when the source exists conceptually but cannot provide a frame right now."""
 
 
+def enable_windows_dpi_awareness() -> None:
+    if not IS_WINDOWS:
+        return
+
+    try:
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        return
+    except Exception:
+        pass
+
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        return
+    except Exception:
+        pass
+
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
 def current_mouse_global_location() -> Optional[Tuple[float, float]]:
+    if IS_WINDOWS:
+        class POINT(ctypes.Structure):
+            _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+        point = POINT()
+        try:
+            if ctypes.windll.user32.GetCursorPos(ctypes.byref(point)):
+                return float(point.x), float(point.y)
+        except Exception:
+            return None
+        return None
+
     if Quartz is None:
         return None
 
@@ -285,6 +329,7 @@ class CaptureSource(ABC):
 
 class ScreenRegionSource(CaptureSource):
     def __init__(self, capture_region: Dict[str, int], pause_on_cursor_in_roi: bool = True) -> None:
+        enable_windows_dpi_awareness()
         self.capture_region = capture_region.copy()
         self.pause_on_cursor_in_roi = bool(pause_on_cursor_in_roi)
         self.cursor_pause_margin_pixels = 8.0
@@ -839,6 +884,344 @@ class MacWindowSource(CaptureSource):
         right = max(left + 1, min(right, w))
         bottom = max(top + 1, min(bottom, h))
         return full_window[top:bottom, left:right].copy()
+
+
+def _win32_window_text(hwnd: int) -> str:
+    if not IS_WINDOWS:
+        return ""
+
+    try:
+        length = int(ctypes.windll.user32.GetWindowTextLengthW(hwnd))
+        buffer = ctypes.create_unicode_buffer(max(1, length + 1))
+        ctypes.windll.user32.GetWindowTextW(hwnd, buffer, len(buffer))
+        return buffer.value.strip()
+    except Exception:
+        return ""
+
+
+def _win32_class_name(hwnd: int) -> str:
+    if not IS_WINDOWS:
+        return ""
+
+    try:
+        buffer = ctypes.create_unicode_buffer(256)
+        ctypes.windll.user32.GetClassNameW(hwnd, buffer, len(buffer))
+        return buffer.value.strip()
+    except Exception:
+        return ""
+
+
+def _win32_process_name(pid: int) -> str:
+    if not IS_WINDOWS or pid <= 0:
+        return ""
+
+    try:
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.QueryFullProcessImageNameW.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if not handle:
+            return ""
+        try:
+            buffer = ctypes.create_unicode_buffer(32768)
+            size = wintypes.DWORD(len(buffer))
+            if kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
+                return Path(buffer.value).name
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return ""
+    return ""
+
+
+def _win32_window_pid(hwnd: int) -> int:
+    if not IS_WINDOWS:
+        return 0
+
+    try:
+        from ctypes import wintypes
+
+        pid = wintypes.DWORD()
+        ctypes.windll.user32.GetWindowThreadProcessId(wintypes.HWND(hwnd), ctypes.byref(pid))
+        return int(pid.value)
+    except Exception:
+        return 0
+
+
+def _win32_is_window_cloaked(hwnd: int) -> bool:
+    if not IS_WINDOWS:
+        return False
+
+    try:
+        from ctypes import wintypes
+
+        DWMWA_CLOAKED = 14
+        cloaked = ctypes.c_int(0)
+        result = ctypes.windll.dwmapi.DwmGetWindowAttribute(
+            wintypes.HWND(hwnd),
+            DWMWA_CLOAKED,
+            ctypes.byref(cloaked),
+            ctypes.sizeof(cloaked),
+        )
+        return result == 0 and cloaked.value != 0
+    except Exception:
+        return False
+
+
+def _win32_query_window_snapshot(hwnd: int) -> Optional[WindowSnapshot]:
+    if not IS_WINDOWS:
+        return None
+
+    enable_windows_dpi_awareness()
+    try:
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        if not user32.IsWindow(wintypes.HWND(hwnd)):
+            return None
+
+        rect = wintypes.RECT()
+        got_rect = False
+        try:
+            DWMWA_EXTENDED_FRAME_BOUNDS = 9
+            got_rect = (
+                ctypes.windll.dwmapi.DwmGetWindowAttribute(
+                    wintypes.HWND(hwnd),
+                    DWMWA_EXTENDED_FRAME_BOUNDS,
+                    ctypes.byref(rect),
+                    ctypes.sizeof(rect),
+                )
+                == 0
+            )
+        except Exception:
+            got_rect = False
+
+        if not got_rect and not user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(rect)):
+            return None
+
+        width = max(0, int(rect.right - rect.left))
+        height = max(0, int(rect.bottom - rect.top))
+        visible = bool(user32.IsWindowVisible(wintypes.HWND(hwnd)))
+        iconic = bool(user32.IsIconic(wintypes.HWND(hwnd)))
+        cloaked = _win32_is_window_cloaked(hwnd)
+        return WindowSnapshot(
+            left=int(rect.left),
+            top=int(rect.top),
+            width=width,
+            height=height,
+            alpha=1.0,
+            is_onscreen=visible and not iconic and not cloaked,
+            layer=0,
+        )
+    except Exception:
+        return None
+
+
+def _matches_window_filter(filter_text: Optional[str], *values: str) -> bool:
+    text = (filter_text or "").strip().lower()
+    if not text:
+        return True
+
+    haystack = " ".join(value for value in values if value).lower()
+    if text in haystack:
+        return True
+
+    tokens = re.findall(r"[a-z0-9가-힣]+", text)
+    meaningful_tokens = [token for token in tokens if token not in {"google"}]
+    return bool(meaningful_tokens) and any(token in haystack for token in meaningful_tokens)
+
+
+class WindowsWindowSource(CaptureSource):
+    def __init__(
+        self,
+        window_id: int,
+        window_owner: str,
+        window_title: str,
+        backend: str = "auto",
+        pause_on_cursor_in_roi: bool = True,
+    ) -> None:
+        if not IS_WINDOWS:
+            raise RuntimeError("Windows 창 캡처는 Windows에서만 사용할 수 있습니다.")
+
+        requested = backend.lower()
+        if requested not in {"auto", "win32-mss"}:
+            raise RuntimeError(f"Windows에서 지원하지 않는 창 캡처 백엔드입니다: {backend}")
+
+        enable_windows_dpi_awareness()
+        self.window_id = int(window_id)
+        self.window_owner = window_owner
+        self.window_title = window_title
+        self.backend = "win32-mss"
+        self.selection_roi_px: Optional[Dict[str, int]] = None
+        self.selection_source_size: Optional[Tuple[int, int]] = None
+        self.norm_roi: Optional[Tuple[float, float, float, float]] = None
+        self.pause_on_cursor_in_roi = bool(pause_on_cursor_in_roi)
+        self.cursor_pause_margin_pixels = 8.0
+        self._sct = mss()
+
+    def set_roi_from_pixels(
+        self,
+        left: int,
+        top: int,
+        width: int,
+        height: int,
+        source_width: int,
+        source_height: int,
+    ) -> None:
+        if width <= 0 or height <= 0:
+            raise RuntimeError("선택한 ROI 가 비어 있습니다.")
+        if source_width <= 0 or source_height <= 0:
+            raise RuntimeError("창 미리보기 크기가 올바르지 않습니다.")
+
+        self.selection_roi_px = {
+            "left": int(left),
+            "top": int(top),
+            "width": int(width),
+            "height": int(height),
+        }
+        self.selection_source_size = (int(source_width), int(source_height))
+        self.norm_roi = (
+            float(left) / float(source_width),
+            float(top) / float(source_height),
+            float(width) / float(source_width),
+            float(height) / float(source_height),
+        )
+
+    def selection_preview(self) -> np.ndarray:
+        return self._capture_full_window(require_roi_cursor_guard=False)
+
+    def capture_frame(self) -> np.ndarray:
+        full_window = self._capture_full_window(require_roi_cursor_guard=True)
+        return self._crop_full_window(full_window)
+
+    def descriptor(self) -> SourceDescriptor:
+        if self.selection_roi_px is None:
+            raise RuntimeError("창 내부 ROI 가 아직 설정되지 않았습니다.")
+
+        return SourceDescriptor(
+            source_type="windows-window",
+            backend=self.backend,
+            region_left=int(self.selection_roi_px["left"]),
+            region_top=int(self.selection_roi_px["top"]),
+            region_width=int(self.selection_roi_px["width"]),
+            region_height=int(self.selection_roi_px["height"]),
+            region_units="window_px_at_selection",
+            window_id=self.window_id,
+            window_owner=self.window_owner,
+            window_title=self.window_title,
+        )
+
+    def to_json(self) -> Dict[str, Any]:
+        if self.selection_roi_px is None or self.selection_source_size is None or self.norm_roi is None:
+            raise RuntimeError("창 내부 ROI 가 아직 설정되지 않았습니다.")
+
+        return {
+            "source_type": "windows-window",
+            "backend": self.backend,
+            "window": {
+                "window_id": self.window_id,
+                "window_owner": self.window_owner,
+                "window_title": self.window_title,
+            },
+            "selection_source_size": {
+                "width": self.selection_source_size[0],
+                "height": self.selection_source_size[1],
+            },
+            "roi_pixels": self.selection_roi_px,
+            "roi_normalized": {
+                "x": self.norm_roi[0],
+                "y": self.norm_roi[1],
+                "width": self.norm_roi[2],
+                "height": self.norm_roi[3],
+            },
+        }
+
+    def _query_window_snapshot(self) -> Optional[WindowSnapshot]:
+        return _win32_query_window_snapshot(self.window_id)
+
+    def _cursor_inside_roi(self) -> bool:
+        if not self.pause_on_cursor_in_roi or self.norm_roi is None:
+            return False
+
+        location = current_mouse_global_location()
+        if location is None:
+            return False
+
+        snapshot = self._query_window_snapshot()
+        if snapshot is None or not snapshot.is_onscreen or snapshot.width <= 0 or snapshot.height <= 0:
+            return False
+
+        x_frac, y_frac, w_frac, h_frac = self.norm_roi
+        roi_left = snapshot.left + (snapshot.width * x_frac)
+        roi_top = snapshot.top + (snapshot.height * y_frac)
+        roi_width = snapshot.width * w_frac
+        roi_height = snapshot.height * h_frac
+        mouse_x, mouse_y = location
+        return point_in_rect(
+            mouse_x,
+            mouse_y,
+            left=roi_left,
+            top=roi_top,
+            width=roi_width,
+            height=roi_height,
+            margin=self.cursor_pause_margin_pixels,
+        )
+
+    def _capture_full_window(self, require_roi_cursor_guard: bool = True) -> np.ndarray:
+        if require_roi_cursor_guard and self._cursor_inside_roi():
+            raise CaptureUnavailableError("커서가 ROI 안에 있어 캡처를 잠시 멈춥니다.")
+
+        snapshot = self._query_window_snapshot()
+        if snapshot is None:
+            raise CaptureUnavailableError("지정한 Windows 창을 찾지 못했습니다.")
+        if not snapshot.is_onscreen or snapshot.width <= 0 or snapshot.height <= 0:
+            raise CaptureUnavailableError("지정한 Windows 창이 최소화되었거나 화면에 보이지 않습니다.")
+
+        region = {
+            "left": snapshot.left,
+            "top": snapshot.top,
+            "width": snapshot.width,
+            "height": snapshot.height,
+        }
+        shot = self._sct.grab(region)
+        img = np.array(shot)
+        return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+
+    def _crop_full_window(self, full_window: np.ndarray) -> np.ndarray:
+        if self.norm_roi is None:
+            raise RuntimeError("창 내부 ROI 가 아직 설정되지 않았습니다.")
+
+        h, w = full_window.shape[:2]
+        x_frac, y_frac, w_frac, h_frac = self.norm_roi
+
+        left = int(round(x_frac * w))
+        top = int(round(y_frac * h))
+        right = int(round((x_frac + w_frac) * w))
+        bottom = int(round((y_frac + h_frac) * h))
+
+        left = max(0, min(left, w - 1))
+        top = max(0, min(top, h - 1))
+        right = max(left + 1, min(right, w))
+        bottom = max(top + 1, min(bottom, h))
+        return full_window[top:bottom, left:right].copy()
+
+    def close(self) -> None:
+        try:
+            self._sct.close()
+        except Exception:
+            pass
 
 
 class SlideCaptureEngine:
@@ -1463,6 +1846,7 @@ def select_roi_on_image(image_bgr: np.ndarray, window_name: str) -> Tuple[int, i
 
 # Full virtual desktop capture remains as the cross-platform fallback.
 def grab_full_desktop() -> Tuple[np.ndarray, Dict[str, int]]:
+    enable_windows_dpi_awareness()
     with mss() as sct:
         monitor = sct.monitors[0].copy()
         shot = sct.grab(monitor)
@@ -1668,7 +2052,66 @@ def cgimage_to_bgr(image: Any) -> np.ndarray:
     return decoded
 
 
+def _list_candidate_windows_win32(owner_filter: Optional[str], title_filter: Optional[str]) -> List[Dict[str, Any]]:
+    if not IS_WINDOWS:
+        return []
+
+    enable_windows_dpi_awareness()
+    windows: List[Dict[str, Any]] = []
+
+    try:
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def enum_proc(hwnd, _lparam) -> bool:
+            hwnd_int = int(hwnd)
+            snapshot = _win32_query_window_snapshot(hwnd_int)
+            if snapshot is None or not snapshot.is_onscreen:
+                return True
+            if snapshot.width < 200 or snapshot.height < 120:
+                return True
+
+            title = _win32_window_text(hwnd_int)
+            class_name = _win32_class_name(hwnd_int)
+            pid = _win32_window_pid(hwnd_int)
+            process_name = _win32_process_name(pid)
+            owner = process_name or class_name or "Windows"
+            if not title and not class_name:
+                return True
+
+            if not _matches_window_filter(owner_filter, owner, class_name, title):
+                return True
+            if not _matches_window_filter(title_filter, title):
+                return True
+
+            windows.append(
+                {
+                    "window_id": hwnd_int,
+                    "window_owner": owner,
+                    "window_title": title or class_name,
+                    "left": snapshot.left,
+                    "top": snapshot.top,
+                    "width": snapshot.width,
+                    "height": snapshot.height,
+                    "area": snapshot.width * snapshot.height,
+                }
+            )
+            return True
+
+        user32.EnumWindows(enum_proc, 0)
+    except Exception as exc:
+        raise RuntimeError(f"Windows 창 목록 조회에 실패했습니다: {exc}") from exc
+
+    windows.sort(key=lambda item: item["area"], reverse=True)
+    return windows
+
+
 def list_candidate_windows(owner_filter: Optional[str], title_filter: Optional[str]) -> List[Dict[str, Any]]:
+    if IS_WINDOWS:
+        return _list_candidate_windows_win32(owner_filter, title_filter)
+
     if Quartz is None:
         raise RuntimeError("창 목록 조회에는 pyobjc-framework-Quartz 가 필요합니다.")
 
@@ -1706,9 +2149,9 @@ def list_candidate_windows(owner_filter: Optional[str], title_filter: Optional[s
         if width < 200 or height < 120:
             continue
 
-        if owner_filter_lc and owner_filter_lc not in owner.lower():
+        if owner_filter_lc and not _matches_window_filter(owner_filter_lc, owner, title):
             continue
-        if title_filter_lc and title_filter_lc not in title.lower():
+        if title_filter_lc and not _matches_window_filter(title_filter_lc, title):
             continue
 
         window_id = int(dict_get(info, Quartz.kCGWindowNumber, "kCGWindowNumber", default=0) or 0)
@@ -1756,7 +2199,7 @@ def choose_target_window_interactively(
             candidates = list_candidate_windows("Chrome", title_filter)
         if not candidates:
             raise RuntimeError(
-                "선택할 창을 찾지 못했습니다. Chrome 창을 앞으로 띄운 뒤 다시 시도하세요."
+                "선택할 창을 찾지 못했습니다. 강의 창을 화면에 띄운 뒤 다시 시도하세요."
             )
 
         print_candidate_windows(candidates)
@@ -1791,15 +2234,40 @@ def choose_target_window_interactively(
         print("[windows] 범위를 벗어난 번호입니다.\n")
 
 
-# Build the capture source using the best macOS backend available, while keeping the previous screen ROI mode as fallback.
+def create_window_source(
+    *,
+    window_id: int,
+    window_owner: str,
+    window_title: str,
+    backend: str = "auto",
+    pause_on_cursor_in_roi: bool = True,
+) -> CaptureSource:
+    if IS_MACOS:
+        return MacWindowSource(
+            window_id=window_id,
+            window_owner=window_owner,
+            window_title=window_title,
+            backend=backend,
+            pause_on_cursor_in_roi=pause_on_cursor_in_roi,
+        )
+    if IS_WINDOWS:
+        return WindowsWindowSource(
+            window_id=window_id,
+            window_owner=window_owner,
+            window_title=window_title,
+            backend=backend,
+            pause_on_cursor_in_roi=pause_on_cursor_in_roi,
+        )
+    raise RuntimeError("이 플랫폼에서는 창 고정 캡처를 지원하지 않습니다. screen 모드를 사용하세요.")
+
+
+# Build the capture source using a native window backend when available, with screen ROI mode as fallback.
 def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureSource:
     capture_source_mode = resolve_capture_source_mode(args.capture_source)
 
     if capture_source_mode == "window":
-        if Quartz is None:
-            raise RuntimeError(
-                "window 모드에는 pyobjc-framework-Quartz 가 필요합니다. requirements.txt 를 설치하세요."
-            )
+        if not WINDOW_CAPTURE_SUPPORTED:
+            raise RuntimeError("window 모드를 사용할 수 없습니다. screen 모드로 화면 영역을 직접 지정하세요.")
 
         owner_filter = normalize_optional_string(args.window_owner)
         title_filter = normalize_optional_string(args.window_title)
@@ -1814,7 +2282,7 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
             title_filter,
             choose_window=args.choose_window,
         )
-        source = MacWindowSource(
+        source = create_window_source(
             window_id=int(chosen_window["window_id"]),
             window_owner=str(chosen_window["window_owner"]),
             window_title=str(chosen_window["window_title"]),
@@ -1822,10 +2290,10 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
             pause_on_cursor_in_roi=not args.no_pause_on_cursor_in_roi,
         )
         print(
-            f"[window] id={source.window_id} owner={source.window_owner} "
-            f"title={source.window_title or '(제목 없음)'} backend={source.backend}"
+            f"[window] id={chosen_window['window_id']} owner={chosen_window['window_owner']} "
+            f"title={chosen_window['window_title'] or '(제목 없음)'} backend={getattr(source, 'backend', 'auto')}"
         )
-        print("[roi] Chrome 창 내부에서 강의 슬라이드 부분만 선택하세요.")
+        print("[roi] 선택한 창 스냅샷에서 강의 슬라이드 부분만 선택하세요.")
         preview = source.selection_preview()
         x, y, w, h = select_roi_on_image(
             preview,
@@ -1866,7 +2334,7 @@ def resolve_capture_source_mode(requested: str) -> str:
     if requested == "window":
         return "window"
 
-    if sys.platform == "darwin" and Quartz is not None:
+    if WINDOW_CAPTURE_SUPPORTED:
         return "window"
     return "screen"
 
@@ -1924,7 +2392,7 @@ def resolve_target_window(
         candidates = list_candidate_windows("Chrome", title_filter)
     if not candidates:
         raise RuntimeError(
-            "대상 창을 찾지 못했습니다. Chrome 창을 앞으로 띄운 뒤 다시 실행하거나, "
+            "대상 창을 찾지 못했습니다. 강의 창을 화면에 띄운 뒤 다시 실행하거나, "
             "--list-windows 로 후보를 확인한 다음 --window-id 로 지정하세요."
         )
     return candidates[0]
@@ -1934,8 +2402,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "강의 영상의 슬라이드가 바뀌는 시점만 자동 저장합니다. "
-            "macOS 에서는 기본적으로 Chrome 창 자체를 고정 캡처하려고 시도하고, "
-            "불가능하면 기존 화면 ROI 방식으로도 동작합니다."
+            "macOS/Windows 에서는 기본적으로 Chrome 창 자체를 고정 캡처하려고 시도하고, "
+            "그 외 환경에서는 화면 ROI 방식으로 동작합니다."
         )
     )
     parser.add_argument(
@@ -1964,17 +2432,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=["auto", "window", "screen"],
         default="auto",
         help=(
-            "auto=macOS 에서는 창 고정 캡처 우선, 그 외는 화면 ROI. "
-            "window=macOS 창 고정 캡처 강제. screen=기존 화면 ROI 방식 강제."
+            "auto=가능하면 창 고정 캡처 우선, 그 외는 화면 ROI. "
+            "window=네이티브 창 고정 캡처 강제. screen=화면 ROI 방식 강제."
         ),
     )
     parser.add_argument(
         "--window-backend",
-        choices=["auto", "screencapturekit", "coregraphics"],
+        choices=["auto", "screencapturekit", "coregraphics", "win32-mss"],
         default="auto",
         help=(
-            "macOS window 모드에서 사용할 내부 백엔드. "
-            "auto=가능하면 ScreenCaptureKit, 아니면 CoreGraphics."
+            "window 모드에서 사용할 내부 백엔드. "
+            "macOS: ScreenCaptureKit/CoreGraphics, Windows: win32-mss."
         ),
     )
     parser.add_argument(

@@ -8,6 +8,8 @@
     <string>Lecture Slide Capture</string>
     <key>CFBundleExecutable</key>
     <string>lecture-slide-capture</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.openai.lecture-slide-capture</string>
     <key>CFBundleInfoDictionaryVersion</key>
