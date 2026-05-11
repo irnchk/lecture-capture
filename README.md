@@ -1,5 +1,7 @@
 # Lecture Slide Capture
 
+Language: **English** | [한국어](README_ko.md)
+
 Lecture Slide Capture saves only the moments when lecture slides change in a browser window. The repository includes a runnable macOS app bundle and Windows packaging files.
 
 What is included:
