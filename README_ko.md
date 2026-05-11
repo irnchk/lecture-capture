@@ -1,6 +1,6 @@
 # Lecture Slide Capture
 
-언어: [English](README.md) | **한국어**
+기본 GitHub README 페이지에서는 영어/한국어 내용을 같은 화면에서 펼쳐볼 수 있습니다.
 
 강의 영상을 재생하는 창을 기준으로 슬라이드가 바뀌는 시점만 자동 저장하는 앱입니다. 저장소에는 바로 실행 가능한 macOS 앱 번들과 Windows 배포용 빌드 구성이 함께 들어 있습니다.
 
