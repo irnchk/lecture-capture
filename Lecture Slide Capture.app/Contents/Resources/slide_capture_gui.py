@@ -26,7 +26,7 @@ RES_DIR = APP_CONTENTS / "Resources"
 REQ_PATH = RES_DIR / "requirements.txt"
 CONFIG_DIR = Path.home() / "Library" / "Application Support" / "LectureSlideCapture"
 OUTPUT_BASE_FILE = CONFIG_DIR / "output_base.txt"
-DEFAULT_OUTPUT_BASE = Path.home() / "Desktop" / "lecture_captures"
+DEFAULT_OUTPUT_BASE = Path.home() / ".hermes" / "workspace" / "NoteSources"
 LOG_DIR = Path.home() / "Library" / "Logs" / "LectureSlideCapture"
 GUI_LOG_PATH = LOG_DIR / "gui_session.log"
 

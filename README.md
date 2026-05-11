@@ -24,7 +24,7 @@ How to use:
 4. Press `Start Capture` and review the timestamped output folder created under the base save path.
 
 Default output path:
-- `~/Desktop/lecture_captures`
+- `/Users/irnchk/.hermes/workspace/NoteSources`
 - Each run creates a new timestamped session folder automatically.
 
 Notes:
