@@ -240,6 +240,7 @@ def mouse_inside_region(region: Dict[str, int], margin: float = 0.0) -> bool:
 class GracefulStop:
     def __init__(self) -> None:
         self.stop = False
+        self.paused = False
         signal.signal(signal.SIGINT, self._handle)
         try:
             signal.signal(signal.SIGTERM, self._handle)
@@ -248,6 +249,17 @@ class GracefulStop:
 
     def _handle(self, signum, frame) -> None:  # pragma: no cover - signal handler
         self.stop = True
+        self.paused = False
+
+    def request_stop(self) -> None:
+        self.stop = True
+        self.paused = False
+
+    def pause(self) -> None:
+        self.paused = True
+
+    def resume(self) -> None:
+        self.paused = False
 
 
 class CaptureSource(ABC):
@@ -866,6 +878,7 @@ class SlideCaptureEngine:
         self.stopper = GracefulStop()
         self.last_capture_error_log_monotonic = -10_000.0
         self._needs_resync_after_wait = False
+        self._pause_logged = False
 
         self._init_metadata_csv()
         self._init_duplicate_csv()
@@ -1223,6 +1236,21 @@ class SlideCaptureEngine:
 
         try:
             while not self.stopper.stop:
+                if self.stopper.paused:
+                    self.candidate = None
+                    self.previous = None
+                    self._needs_resync_after_wait = True
+                    if not self._pause_logged:
+                        print("[pause] 캡처를 일시정지했습니다.")
+                        self._pause_logged = True
+                    if self._sleep_with_preview_events(self.config.sample_interval):
+                        break
+                    continue
+
+                if self._pause_logged:
+                    print("[pause] 캡처를 다시 시작합니다.")
+                    self._pause_logged = False
+
                 loop_started = time.monotonic()
                 try:
                     current_frame = self.capture_source.capture_frame()

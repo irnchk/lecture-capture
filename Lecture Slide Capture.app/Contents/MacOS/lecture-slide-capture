@@ -3,28 +3,138 @@ set -u
 
 APP_CONTENTS="$(cd "$(dirname "$0")/.." && pwd)"
 RES_DIR="$APP_CONTENTS/Resources"
-TERM_SCRIPT="$RES_DIR/run_capture_terminal.command"
+GUI_SCRIPT="$RES_DIR/slide_capture_gui.py"
 LOG_DIR="$HOME/Library/Logs/LectureSlideCapture"
 LOG_PATH="$LOG_DIR/app_launcher.log"
+PYTHON_FORCE_ARM64=0
+
+is_arm64_machine() {
+  /usr/bin/arch -arm64 /usr/bin/true >/dev/null 2>&1
+}
+
+python_runtime_ok() {
+  local py="$1"
+  local force_arm64="${2:-0}"
+  [[ -x "$py" ]] || return 1
+  if [[ "$force_arm64" == "1" ]]; then
+    /usr/bin/arch -arm64 "$py" - <<'PY' >/dev/null 2>&1
+import importlib
+
+mods = [
+    "cv2",
+    "numpy",
+    "mss",
+    "skimage.metrics",
+    "PIL",
+    "img2pdf",
+    "Quartz",
+    "AppKit",
+    "Foundation",
+    "ScreenCaptureKit",
+]
+for module_name in mods:
+    importlib.import_module(module_name)
+PY
+    return $?
+  fi
+
+  "$py" - <<'PY' >/dev/null 2>&1
+import importlib
+
+mods = [
+    "cv2",
+    "numpy",
+    "mss",
+    "skimage.metrics",
+    "PIL",
+    "img2pdf",
+    "Quartz",
+    "AppKit",
+    "Foundation",
+    "ScreenCaptureKit",
+]
+for module_name in mods:
+    importlib.import_module(module_name)
+PY
+}
+
+resolve_python_bin() {
+  local candidates=()
+  local seen=""
+  local resolved=""
+  local candidate=""
+
+  if [[ -n "${PYTHON_BIN:-}" ]]; then
+    candidates+=("${PYTHON_BIN}")
+  fi
+
+  candidates+=(
+    "/usr/local/bin/python3"
+    "/opt/homebrew/bin/python3"
+    "/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
+    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+    "$(command -v python3 2>/dev/null || true)"
+    "/usr/bin/python3"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    [[ -n "$candidate" ]] || continue
+    [[ -x "$candidate" ]] || continue
+    case ":$seen:" in
+      *":$candidate:"*) continue ;;
+    esac
+    seen="${seen}:$candidate"
+    if is_arm64_machine && python_runtime_ok "$candidate" 1; then
+      PYTHON_FORCE_ARM64=1
+      printf '%s' "$candidate"
+      return 0
+    fi
+    if python_runtime_ok "$candidate" 0; then
+      PYTHON_FORCE_ARM64=0
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+
+  seen=""
+  for candidate in "${candidates[@]}"; do
+    [[ -n "$candidate" ]] || continue
+    [[ -x "$candidate" ]] || continue
+    case ":$seen:" in
+      *":$candidate:"*) continue ;;
+    esac
+    seen="${seen}:$candidate"
+    resolved="$candidate"
+    break
+  done
+
+  printf '%s' "$resolved"
+}
+
+PYTHON_BIN="$(resolve_python_bin)"
 
 mkdir -p "$LOG_DIR"
 {
   echo "=============================="
   date '+%Y-%m-%d %H:%M:%S launcher start'
   echo "APP_CONTENTS=$APP_CONTENTS"
-  echo "TERM_SCRIPT=$TERM_SCRIPT"
+  echo "GUI_SCRIPT=$GUI_SCRIPT"
+  echo "PYTHON_BIN=$PYTHON_BIN"
+  echo "PYTHON_FORCE_ARM64=$PYTHON_FORCE_ARM64"
 } >> "$LOG_PATH" 2>&1
 
-if [[ ! -e "$TERM_SCRIPT" ]]; then
-  echo "[launcher] terminal script not found" >> "$LOG_PATH" 2>&1
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "[launcher] python3 not found" >> "$LOG_PATH" 2>&1
   exit 1
 fi
 
-if [[ ! -x "$TERM_SCRIPT" ]]; then
-  chmod +x "$TERM_SCRIPT" >> "$LOG_PATH" 2>&1 || true
+if [[ ! -e "$GUI_SCRIPT" ]]; then
+  echo "[launcher] gui script not found" >> "$LOG_PATH" 2>&1
+  exit 1
 fi
 
-/usr/bin/open "$TERM_SCRIPT" >> "$LOG_PATH" 2>&1
-STATUS=$?
-echo "[launcher] open status=$STATUS" >> "$LOG_PATH" 2>&1
-exit "$STATUS"
+if [[ "$PYTHON_FORCE_ARM64" == "1" ]]; then
+  exec /usr/bin/arch -arm64 "$PYTHON_BIN" "$GUI_SCRIPT" >> "$LOG_PATH" 2>&1
+fi
+
+exec "$PYTHON_BIN" "$GUI_SCRIPT" >> "$LOG_PATH" 2>&1
