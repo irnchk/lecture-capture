@@ -4,6 +4,8 @@ import argparse
 import ctypes
 import csv
 import json
+import locale
+import os
 import re
 import signal
 import sys
@@ -66,6 +68,118 @@ WINDOW_BACKEND_CHOICES = (
 )
 DEFAULT_WINDOW_OWNER = "Google Chrome"
 PREVIEW_WINDOW_NAME = "Slide Capture Preview"
+APP_ID = "LectureSlideCapture"
+
+TRANSLATIONS: Dict[str, Dict[str, str]] = {
+    "ko": {
+        "The cursor is inside the ROI, so capture is paused briefly.": "커서가 ROI 안에 있어 캡처를 잠시 멈춥니다.",
+        "[window] ScreenCaptureKit preview failed; temporarily falling back to CoreGraphics: {error}": "[window] ScreenCaptureKit 미리보기 실패, CoreGraphics 로 일시 폴백합니다: {error}",
+        "ScreenCaptureKit window capture failed.": "ScreenCaptureKit 창 캡처에 실패했습니다.",
+        "[window-guard] Skipping frame because a transition was detected: {reasons}": "[window-guard] 전환 감지로 프레임을 건너뜁니다: {reasons}",
+        "Skipping frame during Mission Control, desktop switching, or window movement.": "Mission Control/데스크탑 전환/창 이동 중이라 프레임을 잠시 건너뜁니다.",
+        "Stabilizing right after a window transition.": "창 전환 직후 안정화 중입니다.",
+        "Could not find the selected Windows window.": "지정한 Windows 창을 찾지 못했습니다.",
+        "The selected Windows window is minimized or not visible.": "지정한 Windows 창이 최소화되었거나 화면에 보이지 않습니다.",
+        "[duplicate] Skipped because it matches an existing slide: ": "[duplicate] 기존 슬라이드와 동일해 저장하지 않았습니다: ",
+        "[start] Press Ctrl+C to stop.": "[start] Ctrl+C 로 종료합니다.",
+        "[preview] Press q / Q / Esc in the preview window, or close the window, to stop.": "[preview] 미리보기 창에서 q / Q / Esc 를 누르거나 창을 닫으면 종료됩니다.",
+        "[pause] Capture paused.": "[pause] 캡처를 일시정지했습니다.",
+        "[pause] Capture resumed.": "[pause] 캡처를 다시 시작합니다.",
+        "[done] Saved {count} slides.": "[done] 총 {count}장 저장",
+        "[done] Skipped {count} duplicate slides.": "[done] 중복 {count}장은 저장하지 않았습니다.",
+        "[pdf] Excluding image because it could not be read again: {name}": "[pdf] 이미지를 다시 읽지 못해 제외합니다: {name}",
+        "[pdf] Excluding duplicate page: ": "[pdf] 중복 페이지 제외: ",
+        "[pdf] Creating PDF with {page_count} pages after excluding {removed_count} duplicates.": "[pdf] 중복 {removed_count}장을 제외하고 {page_count}장으로 PDF를 만듭니다.",
+        "[pdf] No saved images; PDF was not created.": "[pdf] 저장된 이미지가 없어서 PDF를 만들지 않았습니다.",
+        "[pdf] Created {name} (img2pdf/lossless path, {count} pages).": "[pdf] {name} 생성 완료 (img2pdf / 무손실 경로, {count}장)",
+        "[pdf] Skipping PDF creation because img2pdf and Pillow are unavailable. Run pip install img2pdf pillow, then try again.": "[pdf] img2pdf 와 Pillow 가 없어 PDF 생성을 건너뜁니다. pip install img2pdf pillow 후 다시 실행하세요.",
+        "[pdf] img2pdf is unavailable; falling back to Pillow. This path may re-encode images as JPEG inside the PDF.": "[pdf] img2pdf 가 없어 Pillow 로 대체합니다. 이 경로는 PDF 내부에서 JPEG 재인코딩이 일어날 수 있습니다.",
+        "[pdf] Created {name} (Pillow fallback path, {count} pages).": "[pdf] {name} 생성 완료 (Pillow 대체 경로, {count}장)",
+        "Region selection was cancelled.": "영역 선택이 취소되었습니다.",
+        "[windows] No visible windows found.": "[windows] 표시 가능한 창을 찾지 못했습니다.",
+        "[windows] Candidate windows": "[windows] 후보 창 목록",
+        "(Untitled)": "(제목 없음)",
+        "Could not find a selectable window. Bring the lecture window onscreen and try again.": "선택할 창을 찾지 못했습니다. 강의 창을 화면에 띄운 뒤 다시 시도하세요.",
+        "[windows] Enter a number. Enter=first, r=refresh, q=cancel": "[windows] 번호를 입력하세요. Enter=1번, r=새로고침, q=취소",
+        "> Select: ": "> 선택: ",
+        "Window selection was cancelled.": "창 선택이 취소되었습니다.",
+        "[windows] Enter a numeric window number.\n": "[windows] 숫자 번호를 입력해 주세요.\n",
+        "[windows] Number is out of range.\n": "[windows] 범위를 벗어난 번호입니다.\n",
+        "Window capture is not supported on this platform. Use screen mode.": "이 플랫폼에서는 창 고정 캡처를 지원하지 않습니다. screen 모드를 사용하세요.",
+        "Window mode is unavailable. Use screen mode and select a screen region directly.": "window 모드를 사용할 수 없습니다. screen 모드로 화면 영역을 직접 지정하세요.",
+        "[window] Interpreting input {input} as a candidate number and selecting window ID {window_id}.": "[window] 입력값 {input} 을(를) 후보 번호로 해석해 창 ID {window_id} 를 선택합니다.",
+        "[roi] Select only the lecture slide area in the selected window snapshot.": "[roi] 선택한 창 스냅샷에서 강의 슬라이드 부분만 선택하세요.",
+        "Window Region Selection: drag over the slide area, Enter/Space to confirm, c to cancel": "창 내부 영역 선택: 슬라이드 부분만 드래그 후 Enter / Space, 취소는 c",
+        "[windows] Screen mode does not use the window list. Use it with --capture-source window.": "[windows] screen 모드에서는 창 목록을 사용하지 않습니다. --capture-source window 와 함께 사용하세요.",
+        "[roi] Keep the Chrome window visible and select only the lecture slide area.": "[roi] Chrome 창을 화면에 띄운 상태에서 강의 슬라이드 영역만 선택하세요.",
+        "[roi] left={left}, top={top}, width={width}, height={height}": "[roi] left={left}, top={top}, width={width}, height={height}",
+        "Unsupported capture source: {source}": "지원하지 않는 캡처 소스입니다: {source}",
+        "Could not find the target window. Bring the lecture window onscreen and run again, or inspect candidates with --list-windows and pass one with --window-id.": "대상 창을 찾지 못했습니다. 강의 창을 화면에 띄운 뒤 다시 실행하거나, --list-windows 로 후보를 확인한 다음 --window-id 로 지정하세요.",
+        "[guard] Capture will pause when the cursor enters the ROI.": "[guard] 커서가 ROI 안에 들어오면 캡처를 일시정지합니다.",
+    }
+}
+
+
+def platform_config_dir() -> Path:
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
+        return base / APP_ID
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APP_ID
+    return Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")) / APP_ID
+
+
+def normalize_language_code(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    lowered = value.strip().lower().replace("_", "-")
+    if lowered.startswith("ko"):
+        return "ko"
+    if lowered.startswith("en"):
+        return "en"
+    return None
+
+
+def default_language_code() -> str:
+    env_language = normalize_language_code(os.environ.get("LECTURE_SLIDE_CAPTURE_LANGUAGE"))
+    if env_language:
+        return env_language
+    try:
+        locale_text = locale.getlocale()[0] or ""
+    except Exception:
+        locale_text = ""
+    if not locale_text:
+        locale_text = os.environ.get("LANG", "")
+    return "ko" if locale_text.lower().startswith("ko") else "en"
+
+
+def load_language() -> str:
+    try:
+        path = platform_config_dir() / "language.txt"
+        if path.exists():
+            saved = normalize_language_code(path.read_text(encoding="utf-8"))
+            if saved:
+                return saved
+    except Exception:
+        pass
+    return default_language_code()
+
+
+LANGUAGE = load_language()
+
+
+def set_language(language_code: str) -> None:
+    global LANGUAGE
+    LANGUAGE = normalize_language_code(language_code) or default_language_code()
+    os.environ["LECTURE_SLIDE_CAPTURE_LANGUAGE"] = LANGUAGE
+
+
+def tr(text: str) -> str:
+    return TRANSLATIONS.get(LANGUAGE, {}).get(text, text)
+
+
+def tr_format(text: str, **values: Any) -> str:
+    return tr(text).format(**values)
 
 
 @dataclass
@@ -340,7 +454,7 @@ class ScreenRegionSource(CaptureSource):
             self.capture_region,
             margin=self.cursor_pause_margin_pixels,
         ):
-            raise CaptureUnavailableError("The cursor is inside the ROI, so capture is paused briefly.")
+            raise CaptureUnavailableError(tr("The cursor is inside the ROI, so capture is paused briefly."))
 
         shot = self._sct.grab(self.capture_region)
         img = np.array(shot)
@@ -554,7 +668,7 @@ class MacWindowSource(CaptureSource):
 
     def _capture_full_window(self, require_stable: bool = True) -> np.ndarray:
         if require_stable and self._cursor_inside_roi():
-            raise CaptureUnavailableError("The cursor is inside the ROI, so capture is paused briefly.")
+            raise CaptureUnavailableError(tr("The cursor is inside the ROI, so capture is paused briefly."))
 
         if self.backend == "screencapturekit":
             first_error: Optional[Exception] = None
@@ -568,13 +682,13 @@ class MacWindowSource(CaptureSource):
             else:
                 if not require_stable and Quartz is not None:
                     if not self._logged_backend_fallback:
-                        print(f"[window] ScreenCaptureKit preview failed; temporarily falling back to CoreGraphics: {first_error}")
+                        print(tr_format("[window] ScreenCaptureKit preview failed; temporarily falling back to CoreGraphics: {error}", error=first_error))
                         self._logged_backend_fallback = True
                     full_window = self._capture_with_coregraphics()
                 elif first_error is not None:
                     raise first_error
                 else:
-                    raise CaptureUnavailableError("ScreenCaptureKit window capture failed.")
+                    raise CaptureUnavailableError(tr("ScreenCaptureKit window capture failed."))
         else:
             full_window = self._capture_with_coregraphics()
 
@@ -759,13 +873,13 @@ class MacWindowSource(CaptureSource):
             if self._unstable_since is None:
                 self._unstable_since = now
             if now - self._last_guard_log_monotonic >= 2.0:
-                print(f"[window-guard] Skipping frame because a transition was detected: {', '.join(reasons)}")
+                print(tr_format("[window-guard] Skipping frame because a transition was detected: {reasons}", reasons=", ".join(reasons)))
                 self._last_guard_log_monotonic = now
-            raise CaptureUnavailableError("Skipping frame during Mission Control, desktop switching, or window movement.")
+            raise CaptureUnavailableError(tr("Skipping frame during Mission Control, desktop switching, or window movement."))
 
         if self._unstable_since is not None:
             if now - self._unstable_since < self.unstable_settle_seconds:
-                raise CaptureUnavailableError("Stabilizing right after a window transition.")
+                raise CaptureUnavailableError(tr("Stabilizing right after a window transition."))
             self._unstable_since = None
 
         self._last_valid_frame_health = frame_health
@@ -1181,13 +1295,13 @@ class WindowsWindowSource(CaptureSource):
 
     def _capture_full_window(self, require_roi_cursor_guard: bool = True) -> np.ndarray:
         if require_roi_cursor_guard and self._cursor_inside_roi():
-            raise CaptureUnavailableError("The cursor is inside the ROI, so capture is paused briefly.")
+            raise CaptureUnavailableError(tr("The cursor is inside the ROI, so capture is paused briefly."))
 
         snapshot = self._query_window_snapshot()
         if snapshot is None:
-            raise CaptureUnavailableError("Could not find the selected Windows window.")
+            raise CaptureUnavailableError(tr("Could not find the selected Windows window."))
         if not snapshot.is_onscreen or snapshot.width <= 0 or snapshot.height <= 0:
-            raise CaptureUnavailableError("The selected Windows window is minimized or not visible.")
+            raise CaptureUnavailableError(tr("The selected Windows window is minimized or not visible."))
 
         region = {
             "left": snapshot.left,
@@ -1409,11 +1523,12 @@ class SlideCaptureEngine:
                     self.mode,
                 ]
             )
-        print(
-            "[duplicate] Skipped because it matches an existing slide: "
-            f"keep={duplicate.record.path.name} ssim={duplicate.metrics.ssim:.4f} "
-            f"area={duplicate.metrics.area:.4f} blocks={duplicate.metrics.block_ratio:.4f}"
+        message = (
+            tr("[duplicate] Skipped because it matches an existing slide: ")
+            + f"keep={duplicate.record.path.name} ssim={duplicate.metrics.ssim:.4f} "
+            + f"area={duplicate.metrics.area:.4f} blocks={duplicate.metrics.block_ratio:.4f}"
         )
+        print(message)
 
     def _significant_change(self, ref_metrics: Metrics, trigger: TriggerThreshold) -> bool:
         return (
@@ -1613,9 +1728,9 @@ class SlideCaptureEngine:
 
     def run(self) -> None:
         started_at = time.monotonic()
-        print("[start] Press Ctrl+C to stop.")
+        print(tr("[start] Press Ctrl+C to stop."))
         if self.show_preview:
-            print("[preview] Press q / Q / Esc in the preview window, or close the window, to stop.")
+            print(tr("[preview] Press q / Q / Esc in the preview window, or close the window, to stop."))
 
         try:
             while not self.stopper.stop:
@@ -1624,14 +1739,14 @@ class SlideCaptureEngine:
                     self.previous = None
                     self._needs_resync_after_wait = True
                     if not self._pause_logged:
-                        print("[pause] Capture paused.")
+                        print(tr("[pause] Capture paused."))
                         self._pause_logged = True
                     if self._sleep_with_preview_events(self.config.sample_interval):
                         break
                     continue
 
                 if self._pause_logged:
-                    print("[pause] Capture resumed.")
+                    print(tr("[pause] Capture resumed."))
                     self._pause_logged = False
 
                 loop_started = time.monotonic()
@@ -1717,9 +1832,9 @@ class SlideCaptureEngine:
         if self.make_pdf:
             self._make_pdf()
 
-        print(f"[done] Saved {self.capture_count} slides.")
+        print(tr_format("[done] Saved {count} slides.", count=self.capture_count))
         if self.duplicate_skip_count:
-            print(f"[done] Skipped {self.duplicate_skip_count} duplicate slides.")
+            print(tr_format("[done] Skipped {count} duplicate slides.", count=self.duplicate_skip_count))
         print(f"[output] {self.output_dir}")
 
     def _build_pdf_page_paths(self) -> List[Path]:
@@ -1735,18 +1850,19 @@ class SlideCaptureEngine:
         for path in self.saved_paths:
             frame_bgr = cv2.imread(str(path))
             if frame_bgr is None:
-                print(f"[pdf] Excluding image because it could not be read again: {path.name}")
+                print(tr_format("[pdf] Excluding image because it could not be read again: {name}", name=path.name))
                 continue
 
             rep = self.preprocess(frame_bgr)
             duplicate = self._find_duplicate_saved_slide(rep, records=unique_records)
             if duplicate is not None:
                 removed_count += 1
-                print(
-                    "[pdf] Excluding duplicate page: "
-                    f"drop={path.name} keep={duplicate.record.path.name} "
-                    f"ssim={duplicate.metrics.ssim:.4f} area={duplicate.metrics.area:.4f}"
+                message = (
+                    tr("[pdf] Excluding duplicate page: ")
+                    + f"drop={path.name} keep={duplicate.record.path.name} "
+                    + f"ssim={duplicate.metrics.ssim:.4f} area={duplicate.metrics.area:.4f}"
                 )
+                print(message)
                 continue
 
             unique_paths.append(path)
@@ -1761,37 +1877,45 @@ class SlideCaptureEngine:
             )
 
         if removed_count:
-            print(f"[pdf] Creating PDF with {len(unique_paths)} pages after excluding {removed_count} duplicates.")
+            print(
+                tr_format(
+                    "[pdf] Creating PDF with {page_count} pages after excluding {removed_count} duplicates.",
+                    page_count=len(unique_paths),
+                    removed_count=removed_count,
+                )
+            )
         return unique_paths
 
     def _make_pdf(self) -> None:
         pdf_page_paths = self._build_pdf_page_paths()
         if not pdf_page_paths:
-            print("[pdf] No saved images; PDF was not created.")
+            print(tr("[pdf] No saved images; PDF was not created."))
             return
 
         pdf_path = self.output_dir / "slides.pdf"
         if img2pdf is not None:
             with pdf_path.open("wb") as f:
                 f.write(img2pdf.convert([str(path) for path in pdf_page_paths]))
-            print(f"[pdf] Created {pdf_path.name} (img2pdf/lossless path, {len(pdf_page_paths)} pages).")
+            print(tr_format("[pdf] Created {name} (img2pdf/lossless path, {count} pages).", name=pdf_path.name, count=len(pdf_page_paths)))
             return
 
         if Image is None:
             print(
-                "[pdf] Skipping PDF creation because img2pdf and Pillow are unavailable. "
-                "Run pip install img2pdf pillow, then try again."
+                tr(
+                    "[pdf] Skipping PDF creation because img2pdf and Pillow are unavailable. "
+                    "Run pip install img2pdf pillow, then try again."
+                )
             )
             return
 
-        print("[pdf] img2pdf is unavailable; falling back to Pillow. This path may re-encode images as JPEG inside the PDF.")
+        print(tr("[pdf] img2pdf is unavailable; falling back to Pillow. This path may re-encode images as JPEG inside the PDF."))
         images = []
         for path in pdf_page_paths:
             img = Image.open(path).convert("RGB")
             images.append(img)
         head, *tail = images
         head.save(pdf_path, save_all=True, append_images=tail)
-        print(f"[pdf] Created {pdf_path.name} (Pillow fallback path, {len(pdf_page_paths)} pages).")
+        print(tr_format("[pdf] Created {name} (Pillow fallback path, {count} pages).", name=pdf_path.name, count=len(pdf_page_paths)))
 
 
 def dict_get(mapping: Dict[str, Any], *keys: Any, default: Any = None) -> Any:
@@ -1829,7 +1953,7 @@ def select_roi_on_image(image_bgr: np.ndarray, window_name: str) -> Tuple[int, i
         cv2.destroyAllWindows()
 
     if roi_w <= 0 or roi_h <= 0:
-        raise RuntimeError("Region selection was cancelled.")
+        raise RuntimeError(tr("Region selection was cancelled."))
 
     if scale < 1.0:
         x = int(round(x / scale))
@@ -2177,12 +2301,12 @@ def list_candidate_windows(owner_filter: Optional[str], title_filter: Optional[s
 
 def print_candidate_windows(windows: List[Dict[str, Any]]) -> None:
     if not windows:
-        print("[windows] No visible windows found.")
+        print(tr("[windows] No visible windows found."))
         return
 
-    print("[windows] Candidate windows")
+    print(tr("[windows] Candidate windows"))
     for idx, item in enumerate(windows, start=1):
-        title = item["window_title"] or "(Untitled)"
+        title = item["window_title"] or tr("(Untitled)")
         print(
             f"  {idx:02d}. id={item['window_id']}  owner={item['window_owner']}  "
             f"size={item['width']}x{item['height']}  title={title}"
@@ -2199,13 +2323,13 @@ def choose_target_window_interactively(
             candidates = list_candidate_windows("Chrome", title_filter)
         if not candidates:
             raise RuntimeError(
-                "Could not find a selectable window. Bring the lecture window onscreen and try again."
+                tr("Could not find a selectable window. Bring the lecture window onscreen and try again.")
             )
 
         print_candidate_windows(candidates)
-        print("[windows] Enter a number. Enter=first, r=refresh, q=cancel")
+        print(tr("[windows] Enter a number. Enter=first, r=refresh, q=cancel"))
         try:
-            answer = input("> Select: ").strip()
+            answer = input(tr("> Select: ")).strip()
         except EOFError:
             answer = ""
 
@@ -2213,7 +2337,7 @@ def choose_target_window_interactively(
             return candidates[0]
         lowered = answer.lower()
         if lowered in {"q", "quit", "exit"}:
-            raise RuntimeError("Window selection was cancelled.")
+            raise RuntimeError(tr("Window selection was cancelled."))
         if lowered in {"r", "refresh", "reload"}:
             print()
             continue
@@ -2221,7 +2345,7 @@ def choose_target_window_interactively(
         try:
             number = int(answer)
         except ValueError:
-            print("[windows] Enter a numeric window number.\n")
+            print(tr("[windows] Enter a numeric window number.\n"))
             continue
 
         if 1 <= number <= len(candidates):
@@ -2231,7 +2355,7 @@ def choose_target_window_interactively(
             if int(item["window_id"]) == number:
                 return item
 
-        print("[windows] Number is out of range.\n")
+        print(tr("[windows] Number is out of range.\n"))
 
 
 def create_window_source(
@@ -2258,7 +2382,7 @@ def create_window_source(
             backend=backend,
             pause_on_cursor_in_roi=pause_on_cursor_in_roi,
         )
-    raise RuntimeError("Window capture is not supported on this platform. Use screen mode.")
+    raise RuntimeError(tr("Window capture is not supported on this platform. Use screen mode."))
 
 
 # Build the capture source using a native window backend when available, with screen ROI mode as fallback.
@@ -2267,7 +2391,7 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
 
     if capture_source_mode == "window":
         if not WINDOW_CAPTURE_SUPPORTED:
-            raise RuntimeError("Window mode is unavailable. Use screen mode and select a screen region directly.")
+            raise RuntimeError(tr("Window mode is unavailable. Use screen mode and select a screen region directly."))
 
         owner_filter = normalize_optional_string(args.window_owner)
         title_filter = normalize_optional_string(args.window_title)
@@ -2293,11 +2417,11 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
             f"[window] id={chosen_window['window_id']} owner={chosen_window['window_owner']} "
             f"title={chosen_window['window_title'] or '(Untitled)'} backend={getattr(source, 'backend', 'auto')}"
         )
-        print("[roi] Select only the lecture slide area in the selected window snapshot.")
+        print(tr("[roi] Select only the lecture slide area in the selected window snapshot."))
         preview = source.selection_preview()
         x, y, w, h = select_roi_on_image(
             preview,
-            "Window Region Selection: drag over the slide area, Enter/Space to confirm, c to cancel",
+            tr("Window Region Selection: drag over the slide area, Enter/Space to confirm, c to cancel"),
         )
         ph, pw = preview.shape[:2]
         source.set_roi_from_pixels(x, y, w, h, pw, ph)
@@ -2306,13 +2430,13 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
 
     if args.list_windows:
         # Keep users from confusing --list-windows with screen mode.
-        print("[windows] Screen mode does not use the window list. Use it with --capture-source window.")
+        print(tr("[windows] Screen mode does not use the window list. Use it with --capture-source window."))
         raise SystemExit(0)
 
     if args.roi is not None:
         region = args.roi
     else:
-        print("[roi] Keep the Chrome window visible and select only the lecture slide area.")
+        print(tr("[roi] Keep the Chrome window visible and select only the lecture slide area."))
         region = select_screen_region_interactively()
 
     source = ScreenRegionSource(
@@ -2320,14 +2444,14 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
         pause_on_cursor_in_roi=not args.no_pause_on_cursor_in_roi,
     )
     save_capture_json(source.to_json(), output_dir)
-    print("[roi] left={left}, top={top}, width={width}, height={height}".format(**region))
+    print(tr_format("[roi] left={left}, top={top}, width={width}, height={height}", **region))
     return source
 
 
 def resolve_capture_source_mode(requested: str) -> str:
     requested = requested.lower()
     if requested not in {"auto", "window", "screen"}:
-        raise RuntimeError(f"Unsupported capture source: {requested}")
+        raise RuntimeError(tr_format("Unsupported capture source: {source}", source=requested))
 
     if requested == "screen":
         return "screen"
@@ -2367,8 +2491,11 @@ def resolve_target_window(
         if 1 <= explicit_window_id <= len(filtered_candidates):
             chosen = filtered_candidates[explicit_window_id - 1]
             print(
-                f"[window] Interpreting input {explicit_window_id} as a candidate number "
-                f"and selecting window ID {chosen['window_id']}."
+                tr_format(
+                    "[window] Interpreting input {input} as a candidate number and selecting window ID {window_id}.",
+                    input=explicit_window_id,
+                    window_id=chosen["window_id"],
+                )
             )
             return chosen
 
@@ -2392,8 +2519,10 @@ def resolve_target_window(
         candidates = list_candidate_windows("Chrome", title_filter)
     if not candidates:
         raise RuntimeError(
-            "Could not find the target window. Bring the lecture window onscreen and run again, "
-            "or inspect candidates with --list-windows and pass one with --window-id."
+            tr(
+                "Could not find the target window. Bring the lecture window onscreen and run again, "
+                "or inspect candidates with --list-windows and pass one with --window-id."
+            )
         )
     return candidates[0]
 
@@ -2497,12 +2626,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Keep repeated identical slides in saved images and the PDF (default removes duplicates)",
     )
+    parser.add_argument(
+        "--language",
+        choices=["auto", "en", "ko"],
+        default="auto",
+        help="Interface/log language. auto uses the saved app setting or OS language",
+    )
     return parser
 
 
 def main() -> None:
     parser = build_arg_parser()
     args = parser.parse_args()
+    if args.language != "auto":
+        set_language(args.language)
 
     config = Config(sample_interval=max(0.10, float(args.interval)))
     output_dir: Path = args.output
@@ -2510,7 +2647,7 @@ def main() -> None:
 
     capture_source = build_capture_source(args, output_dir)
     if not args.no_pause_on_cursor_in_roi:
-        print("[guard] Capture will pause when the cursor enters the ROI.")
+        print(tr("[guard] Capture will pause when the cursor enters the ROI."))
 
     engine = SlideCaptureEngine(
         capture_source=capture_source,

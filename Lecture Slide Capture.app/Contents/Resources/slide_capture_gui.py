@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import ctypes
 import io
+import locale
 import os
 import platform
 import queue
@@ -73,9 +74,149 @@ def platform_log_dir() -> Path:
 
 CONFIG_DIR = platform_config_dir()
 OUTPUT_BASE_FILE = CONFIG_DIR / "output_base.txt"
+LANGUAGE_FILE = CONFIG_DIR / "language.txt"
 DEFAULT_OUTPUT_BASE = Path.home() / "Documents" / "Lecture Slide Capture"
 LOG_DIR = platform_log_dir()
 GUI_LOG_PATH = LOG_DIR / "gui_session.log"
+
+LANGUAGE_NAMES = {"en": "English", "ko": "한국어"}
+LANGUAGE_NAME_TO_CODE = {label: code for code, label in LANGUAGE_NAMES.items()}
+
+TRANSLATIONS: Dict[str, Dict[str, str]] = {
+    "ko": {
+        "Could not find a python3 executable.": "python3 실행 파일을 찾지 못했습니다.",
+        "Close": "닫기",
+        "Copy Details": "내용 복사",
+        "Required Python packages are not installed yet.": "필수 Python 패키지가 아직 설치되지 않았습니다.",
+        "Missing modules:": "누락 항목:",
+        "Missing modules: {missing}": "누락 항목: {missing}",
+        "Run this command:": "아래 명령을 실행하세요:",
+        "(The install command has been copied to the clipboard.)": "(설치 명령을 클립보드에 복사했습니다.)",
+        "Press Enter to close this window...": "엔터를 누르면 이 창을 닫습니다...",
+        "The app does not install packages automatically.\nRun the command below in Terminal, then reopen the app.\nYou can also open a Terminal window with the command prepared.": "앱 안에서는 자동 설치를 진행하지 않습니다.\n아래 명령을 Terminal에서 직접 실행한 뒤 앱을 다시 열어 주세요.\n원하면 Terminal 창을 자동으로 열어 안내만 표시할 수도 있습니다.",
+        "\nThe install command has also been copied to the clipboard.": "\n설치 명령은 클립보드에도 복사해 두었습니다.",
+        "1. Open Terminal  2. Run the command  3. Reopen the app after installation": "1. Terminal 열기  2. 명령 실행  3. 설치 완료 후 앱 다시 실행",
+        "Copy Command": "명령 복사",
+        "Open in Terminal": "Terminal에서 열기",
+        "Drag to select the slide region.": "드래그해서 슬라이드 영역을 선택하세요.",
+        "Reset": "초기화",
+        "Cancel": "취소",
+        "Confirm": "확인",
+        "Selecting: {width} x {height}": "선택 중: {width} x {height}",
+        "Region Selection": "영역 선택",
+        "Drag to select a capture region first.": "먼저 드래그해서 캡처할 영역을 선택해 주세요.",
+        "Select a region with width and height greater than zero.": "너비와 높이가 1 이상인 영역을 선택해 주세요.",
+        "No session is open yet.": "아직 열린 세션이 없습니다.",
+        "Pause": "일시정지",
+        "Resume": "재개",
+        "No capture region has been selected yet.": "아직 캡처 영역이 선택되지 않았습니다.",
+        "Idle": "대기 중",
+        "Capturing": "캡처 중",
+        "Paused": "일시정지됨",
+        "Stopping": "종료 중",
+        "Complete": "완료",
+        "Ended with Error": "오류로 종료",
+        "Lecture Slide Capture GUI is ready": "Lecture Slide Capture GUI 준비 완료",
+        "Slide Capture Studio": "슬라이드 캡처 스튜디오",
+        "Choose a lecture window, mark the slide region, capture changes, and generate a PDF from one screen.": "강의 창 선택부터 슬라이드 영역 지정, 자동 저장과 PDF 생성까지 한 화면에서 관리합니다.",
+        "Language": "언어",
+        "Language can be changed after capture finishes.": "언어는 캡처가 끝난 뒤 변경할 수 있습니다.",
+        "Language Changed": "언어 변경",
+        "The interface language has been changed.": "인터페이스 언어를 변경했습니다.",
+        "[gui] Language setting changed.": "[gui] 언어 설정을 변경했습니다.",
+        "1  Source": "1  소스",
+        "Choose the window or screen region that shows the lecture.": "강의가 표시되는 창 또는 화면 영역을 고릅니다.",
+        "Capture Chrome Window": "Chrome 창 고정 캡처",
+        "Capture Screen Region": "화면 영역 직접 캡처",
+        "App Name Filter": "앱 이름 필터",
+        "Window Title Filter": "창 제목 필터",
+        "Window Capture Backend": "창 캡처 백엔드",
+        "Refresh Window List": "창 목록 새로고침",
+        "2  Region": "2  영역",
+        "Mark only the visible slide area as the ROI.": "슬라이드가 보이는 부분만 ROI로 지정합니다.",
+        "Select Slide Region": "슬라이드 영역 선택",
+        "Select Screen Region": "화면 영역 선택",
+        "3  Capture": "3  캡처",
+        "Confirm the output location and detection options, then start.": "저장 위치와 감지 옵션을 확인한 뒤 시작합니다.",
+        "Base Output Folder": "저장 기본 경로",
+        "Browse": "찾아보기",
+        "Detection Mode": "감지 모드",
+        "Interval": "간격",
+        "Create PDF on Finish": "종료 시 PDF 생성",
+        "Keep Duplicate Slides": "중복 슬라이드도 유지",
+        "Pause when cursor is inside ROI": "커서가 ROI 안에 있으면 일시정지",
+        "Live Status": "실시간 상태",
+        "Status": "상태",
+        "Ready.": "준비되었습니다.",
+        "Saved Slides": "저장된 슬라이드",
+        "This session": "이번 세션",
+        "Duplicates Skipped": "중복으로 건너뜀",
+        "Elapsed Time": "경과 시간",
+        "Selected Region Preview": "선택 영역 미리보기",
+        "No preview yet.": "미리보기가 없습니다.",
+        "Latest Slide": "최근 슬라이드",
+        "The latest saved slide will appear here after capture starts.": "캡처가 시작되면 최근 저장된 슬라이드를 여기에 보여줍니다.",
+        "Session Log": "세션 로그",
+        "Open Session Folder": "세션 폴더 열기",
+        "Select a region before starting capture. While running, only pause and finish are available.": "영역을 먼저 선택한 뒤 캡처를 시작하세요. 진행 중에는 일시정지와 종료만 사용할 수 있습니다.",
+        "Start Capture": "캡처 시작",
+        "Finish": "종료",
+        "View All Captures": "캡처본 전체 보기",
+        "[gui] Capture resumed.": "[gui] 캡처를 다시 시작합니다.",
+        "[gui] Capture paused.": "[gui] 캡처를 일시정지했습니다.",
+        "[gui] Finish requested.": "[gui] 종료 요청을 보냈습니다.",
+        "Session folder: {folder}\nSaved slides: {count}": "세션 폴더: {folder}\n저장된 슬라이드: {count}",
+        "No saved slides yet.\nStart capture or wait for slide changes.": "아직 저장된 슬라이드가 없습니다.\n캡처를 시작하거나 슬라이드 변경을 기다려 주세요.",
+        "Could not load preview.": "미리보기를 불러오지 못했습니다.",
+        "Open File": "파일 열기",
+        "All Captures": "캡처본 전체 보기",
+        "Captured Slides": "현재 캡처된 슬라이드",
+        "Refresh": "새로고침",
+        "No saved slides yet.": "아직 저장된 슬라이드가 없습니다.",
+        "No preview": "미리보기 없음",
+        "Choose Base Output Folder": "저장 기본 경로 선택",
+        "(Untitled)": "(제목 없음)",
+        "(Unknown App)": "(앱 이름 없음)",
+        "Window capture is not available on this platform. Use screen-region capture instead.": "이 플랫폼에서는 창 고정 캡처를 사용할 수 없습니다. 화면 영역 직접 캡처를 사용하세요.",
+        "Window List Failed": "창 목록 조회 실패",
+        "No matching window found. Bring the Chrome lecture window forward and try again.": "조건에 맞는 창을 찾지 못했습니다. Chrome 창을 앞으로 띄운 뒤 다시 시도해 주세요.",
+        "No window to display.": "표시할 창이 없습니다.",
+        "Select the Chrome window to capture.": "캡처할 Chrome 창을 선택해 주세요.",
+        "Target window: {owner} / {title}\nWindow ID: {window_id}  Size: {width} x {height}": "대상 창: {owner} / {title}\n창 ID: {window_id}  크기: {width} x {height}",
+        "\nSelected slide region: left={left}, top={top}, width={width}, height={height}": "\n선택한 슬라이드 영역: left={left}, top={top}, width={width}, height={height}",
+        "\nNo slide region has been selected yet.": "\n아직 슬라이드 영역을 선택하지 않았습니다.",
+        "Select the ROI directly from the full screen.\nSelected region: left={left}, top={top}, width={width}, height={height}": "화면 전체에서 ROI를 직접 지정합니다.\n선택한 영역: left={left}, top={top}, width={width}, height={height}",
+        "Screen capture mode. Select the capture region first.": "화면 캡처 모드입니다. 캡처할 영역을 먼저 선택해 주세요.",
+        "Capture Running": "캡처 진행 중",
+        "You cannot choose a new region while capture is running.": "캡처가 진행 중일 때는 영역을 다시 고를 수 없습니다.",
+        "Window Capture": "창 캡처",
+        "Window capture is not available on this platform.": "이 플랫폼에서는 창 고정 캡처를 사용할 수 없습니다.",
+        "Select Target Window": "대상 창 선택",
+        "Select a window to capture first.": "먼저 캡처할 창을 선택해 주세요.",
+        "Select Slide Region Inside Window": "창 내부 슬라이드 영역 선택",
+        "Drag over the slide area in the selected window snapshot.": "선택한 창 스냅샷에서 슬라이드 영역만 드래그해 선택하세요.",
+        "Drag over the screen area where the lecture slide is visible.": "강의 슬라이드가 보이는 화면 영역만 드래그해 선택하세요.",
+        "Region Selection Failed": "영역 선택 실패",
+        "No slide region has been selected for the chosen window yet.": "선택한 창의 슬라이드 영역을 아직 지정하지 않았습니다.",
+        "No screen region has been selected yet.": "화면 영역을 아직 지정하지 않았습니다.",
+        "Enter a numeric sampling interval.": "샘플링 간격은 숫자로 입력해 주세요.",
+        "The sampling interval must be at least 0.10 seconds.": "샘플링 간격은 0.10초 이상이어야 합니다.",
+        "Select a window to capture.": "캡처할 창을 선택해 주세요.",
+        "Select a slide region for the chosen window first.": "선택한 창에 대해 슬라이드 영역을 먼저 지정해 주세요.",
+        "Select a screen region to capture first.": "캡처할 화면 영역을 먼저 선택해 주세요.",
+        "Capture Start Failed": "캡처 시작 실패",
+        "[gui] Session started: {output_dir}": "[gui] 세션 시작: {output_dir}",
+        "Capture Error": "캡처 오류",
+        "An error occurred during capture. Check the log below.": "캡처 도중 오류가 발생했습니다. 아래 로그를 확인해 주세요.",
+        "Capture Complete": "캡처 완료",
+        "Saved slides: {saved}\nDuplicate slides skipped: {duplicates}": "저장된 슬라이드: {saved}장\n중복으로 건너뛴 슬라이드: {duplicates}장",
+        "Finish Capture": "캡처 종료",
+        "Capture is still running. Send a finish request and close the window?\nA PDF will be generated from the slides saved so far.": "캡처가 진행 중입니다. 종료 요청을 보낸 뒤 창을 닫을까요?\n현재까지 저장된 슬라이드로 PDF 생성까지 진행됩니다.",
+        "Preparing the app.\nChecking required modules and the capture engine.": "앱을 준비하고 있습니다.\n필수 모듈과 캡처 엔진을 확인하는 중입니다.",
+        "Initialization Failed": "초기화 실패",
+        "Could not load the capture module. Check the details below.": "캡처 모듈을 불러오지 못했습니다. 아래 내용을 확인해 주세요.",
+    }
+}
 
 BASE_REQUIRED_MODULES = [
     "cv2",
@@ -160,6 +301,59 @@ def load_output_base() -> Path:
 def save_output_base(value: Path) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_BASE_FILE.write_text(str(value), encoding="utf-8")
+
+
+def normalize_language_code(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text in LANGUAGE_NAME_TO_CODE:
+        return LANGUAGE_NAME_TO_CODE[text]
+    lowered = text.lower().replace("_", "-")
+    if lowered.startswith("ko"):
+        return "ko"
+    if lowered.startswith("en"):
+        return "en"
+    return None
+
+
+def default_language_code() -> str:
+    env_language = normalize_language_code(os.environ.get("LECTURE_SLIDE_CAPTURE_LANGUAGE"))
+    if env_language:
+        return env_language
+    locale_text = ""
+    try:
+        locale_text = locale.getlocale()[0] or ""
+    except Exception:
+        locale_text = ""
+    if not locale_text:
+        locale_text = os.environ.get("LANG", "")
+    return "ko" if locale_text.lower().startswith("ko") else "en"
+
+
+def load_language() -> str:
+    try:
+        if LANGUAGE_FILE.exists():
+            saved = normalize_language_code(LANGUAGE_FILE.read_text(encoding="utf-8"))
+            if saved:
+                return saved
+    except Exception:
+        pass
+    return default_language_code()
+
+
+def save_language(language_code: str) -> None:
+    normalized = normalize_language_code(language_code) or default_language_code()
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    LANGUAGE_FILE.write_text(normalized, encoding="utf-8")
+    os.environ["LECTURE_SLIDE_CAPTURE_LANGUAGE"] = normalized
+
+
+def translate_text(text: str, language_code: Optional[str] = None) -> str:
+    language = normalize_language_code(language_code) or load_language()
+    return TRANSLATIONS.get(language, {}).get(text, text)
 
 
 def discover_missing_modules() -> list[str]:
@@ -302,7 +496,7 @@ def get_python_bin() -> str:
     found = shutil.which("python3")
     if found:
         return found
-    raise RuntimeError("Could not find a python3 executable.")
+    raise RuntimeError(translate_text("Could not find a python3 executable."))
 
 
 def build_install_command() -> str:
@@ -316,7 +510,7 @@ def build_install_command() -> str:
     return base_command
 
 
-def show_long_message(parent: tk.Misc, title: str, message: str, details: str) -> None:
+def show_long_message(parent: tk.Misc, title: str, message: str, details: str, language_code: Optional[str] = None) -> None:
     dialog = tk.Toplevel(parent)
     dialog.title(title)
     dialog.transient(parent)
@@ -335,7 +529,7 @@ def show_long_message(parent: tk.Misc, title: str, message: str, details: str) -
 
     button_row = ttk.Frame(outer)
     button_row.pack(fill="x", pady=(12, 0))
-    ttk.Button(button_row, text="Close", command=dialog.destroy).pack(side="right")
+    ttk.Button(button_row, text=translate_text("Close", language_code), command=dialog.destroy).pack(side="right")
 
     dialog.wait_window()
 
@@ -403,7 +597,7 @@ def show_bootstrap_screen(root: tk.Tk, message: str) -> None:
     root.update()
 
 
-def show_error_screen(root: tk.Tk, title: str, message: str, details: str) -> None:
+def show_error_screen(root: tk.Tk, title: str, message: str, details: str, language_code: Optional[str] = None) -> None:
     clear_root_content(root)
     root.title(title)
     root.configure(background="#f5f1e8")
@@ -456,15 +650,20 @@ def show_error_screen(root: tk.Tk, title: str, message: str, details: str) -> No
         except Exception:
             pass
 
-    tk.Button(button_row, text="Copy Details", command=copy_details, padx=14, pady=6).pack(side="left")
-    tk.Button(button_row, text="Close", command=root.destroy, padx=16, pady=6).pack(side="right")
+    tk.Button(button_row, text=translate_text("Copy Details", language_code), command=copy_details, padx=14, pady=6).pack(side="left")
+    tk.Button(button_row, text=translate_text("Close", language_code), command=root.destroy, padx=16, pady=6).pack(side="right")
 
     present_root_window(root, 900, 620)
 
 
-def write_install_terminal_script(install_command: str, missing_text: str) -> Path:
+def write_install_terminal_script(install_command: str, missing_text: str, language_code: Optional[str] = None) -> Path:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     script_path = CONFIG_DIR / "show_install_in_terminal.command"
+    required_text = translate_text("Required Python packages are not installed yet.", language_code)
+    missing_label = translate_text("Missing modules:", language_code)
+    run_label = translate_text("Run this command:", language_code)
+    copied_label = translate_text("(The install command has been copied to the clipboard.)", language_code)
+    close_prompt = translate_text("Press Enter to close this window...", language_code)
     script_text = f"""#!/bin/bash
 set -u
 
@@ -476,27 +675,27 @@ echo "=============================================="
 echo " Lecture Slide Capture"
 echo "=============================================="
 echo
-echo "Required Python packages are not installed yet."
+echo {shlex.quote(required_text)}
 echo
-echo "Missing modules:"
+echo {shlex.quote(missing_label)}
 printf '%s\\n' "$MISSING_TEXT"
 echo
-echo "Run this command:"
+echo {shlex.quote(run_label)}
 echo
 printf '%s\\n\\n' "$INSTALL_CMD"
 if command -v pbcopy >/dev/null 2>&1; then
   printf '%s' "$INSTALL_CMD" | pbcopy
-  echo "(The install command has been copied to the clipboard.)"
+  echo {shlex.quote(copied_label)}
   echo
 fi
-read -r -p "Press Enter to close this window..." _
+read -r -p {shlex.quote(close_prompt)} _
 """
     script_path.write_text(script_text, encoding="utf-8")
     script_path.chmod(0o755)
     return script_path
 
 
-def open_install_command_in_terminal(install_command: str, missing_text: str) -> None:
+def open_install_command_in_terminal(install_command: str, missing_text: str, language_code: Optional[str] = None) -> None:
     if sys.platform == "win32":
         subprocess.Popen(["cmd.exe", "/k", install_command])
         return
@@ -504,7 +703,7 @@ def open_install_command_in_terminal(install_command: str, missing_text: str) ->
         subprocess.Popen(["sh", "-lc", install_command])
         return
 
-    script_path = write_install_terminal_script(install_command, missing_text)
+    script_path = write_install_terminal_script(install_command, missing_text, language_code)
     subprocess.Popen(["open", str(script_path)])
 
 
@@ -518,7 +717,7 @@ def open_path(path: Path) -> None:
     subprocess.run(["xdg-open", str(path)], check=False)
 
 
-def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, clipboard_ready: bool) -> None:
+def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, clipboard_ready: bool, language_code: Optional[str] = None) -> None:
     clear_root_content(root)
     root.title("Lecture Slide Capture")
     root.configure(background="#f5f1e8")
@@ -530,7 +729,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
 
     tk.Label(
         outer,
-        text="Required Python packages are not installed yet.",
+        text=translate_text("Required Python packages are not installed yet.", language_code),
         bg="#f5f1e8",
         fg="#1f2937",
         font=ui_font("display", 15, "bold"),
@@ -540,7 +739,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
 
     tk.Label(
         outer,
-        text=f"Missing modules: {missing_text}",
+        text=translate_text("Missing modules: {missing}", language_code).format(missing=missing_text),
         bg="#f5f1e8",
         fg="#374151",
         font=ui_font("text", 12),
@@ -550,13 +749,14 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
         pady=10,
     ).pack(fill="x", anchor="w")
 
-    note_text = (
+    note_text = translate_text(
         "The app does not install packages automatically.\n"
         "Run the command below in Terminal, then reopen the app.\n"
-        "You can also open a Terminal window with the command prepared."
+        "You can also open a Terminal window with the command prepared.",
+        language_code,
     )
     if clipboard_ready:
-        note_text += "\nThe install command has also been copied to the clipboard."
+        note_text += translate_text("\nThe install command has also been copied to the clipboard.", language_code)
 
     tk.Label(
         outer,
@@ -588,7 +788,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
 
     footer = tk.Label(
         outer,
-        text="1. Open Terminal  2. Run the command  3. Reopen the app after installation",
+        text=translate_text("1. Open Terminal  2. Run the command  3. Reopen the app after installation", language_code),
         bg="#f5f1e8",
         fg="#6b7280",
         font=ui_font("text", 11),
@@ -609,21 +809,21 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
     button_row.pack(fill="x")
     tk.Button(
         button_row,
-        text="Copy Command",
+        text=translate_text("Copy Command", language_code),
         command=copy_command,
         padx=14,
         pady=6,
     ).pack(side="left")
     tk.Button(
         button_row,
-        text="Open in Terminal",
-        command=lambda: open_install_command_in_terminal(install_command, missing_text),
+        text=translate_text("Open in Terminal", language_code),
+        command=lambda: open_install_command_in_terminal(install_command, missing_text, language_code),
         padx=14,
         pady=6,
     ).pack(side="left", padx=(8, 0))
     tk.Button(
         button_row,
-        text="Close",
+        text=translate_text("Close", language_code),
         command=root.destroy,
         padx=16,
         pady=6,
@@ -690,12 +890,20 @@ class ScreenRegionSelection:
 
 
 class RoiSelectorDialog:
-    def __init__(self, parent: tk.Misc, image_bgr: Any, title: str, help_text: str) -> None:
+    def __init__(
+        self,
+        parent: tk.Misc,
+        image_bgr: Any,
+        title: str,
+        help_text: str,
+        language_code: Optional[str] = None,
+    ) -> None:
         from PIL import Image, ImageTk
 
         self.Image = Image
         self.ImageTk = ImageTk
         self.parent = parent
+        self.language_code = normalize_language_code(language_code) or load_language()
         self.original_bgr = image_bgr
         self.help_text = help_text
         self.result: Optional[Tuple[int, int, int, int]] = None
@@ -721,7 +929,7 @@ class RoiSelectorDialog:
         self.viewport_height = min(self.display_image.height, max(420, parent.winfo_screenheight() - 320))
 
         self.top = tk.Toplevel(parent)
-        self.top.title(title)
+        self.top.title(self.tr(title))
         self.top.transient(parent)
         self.top.grab_set()
         self.top.resizable(True, True)
@@ -733,11 +941,11 @@ class RoiSelectorDialog:
 
         ttk.Label(
             outer,
-            text=help_text,
+            text=self.tr(help_text),
             justify="left",
             wraplength=min(1200, self.viewport_width),
         ).grid(row=0, column=0, sticky="w")
-        self.status_var = tk.StringVar(value="Drag to select the slide region.")
+        self.status_var = tk.StringVar(value=self.tr("Drag to select the slide region."))
         ttk.Label(outer, textvariable=self.status_var, foreground="#355c7d").grid(
             row=1,
             column=0,
@@ -778,9 +986,9 @@ class RoiSelectorDialog:
 
         button_row = ttk.Frame(outer)
         button_row.grid(row=3, column=0, sticky="ew", pady=(12, 0))
-        ttk.Button(button_row, text="Reset", command=self._reset).pack(side="left")
-        ttk.Button(button_row, text="Cancel", command=self._cancel).pack(side="right")
-        ttk.Button(button_row, text="Confirm", command=self._confirm).pack(side="right", padx=(0, 8))
+        ttk.Button(button_row, text=self.tr("Reset"), command=self._reset).pack(side="left")
+        ttk.Button(button_row, text=self.tr("Cancel"), command=self._cancel).pack(side="right")
+        ttk.Button(button_row, text=self.tr("Confirm"), command=self._confirm).pack(side="right", padx=(0, 8))
 
         self.top.bind("<Escape>", lambda _event: self._cancel())
         self.top.bind("<Return>", lambda _event: self._confirm())
@@ -793,6 +1001,9 @@ class RoiSelectorDialog:
             f"{dialog_width}x{dialog_height}+{max(60, parent.winfo_rootx() + 40)}+{max(60, parent.winfo_rooty() + 40)}"
         )
         self.canvas.focus_set()
+
+    def tr(self, text: str) -> str:
+        return translate_text(text, self.language_code)
 
     def _canvas_point(self, event: tk.Event) -> Tuple[float, float]:
         x = min(max(float(self.canvas.canvasx(event.x)), 0.0), float(self.display_image.width))
@@ -832,7 +1043,12 @@ class RoiSelectorDialog:
         )
         width = abs(x1 - x0)
         height = abs(y1 - y0)
-        self.status_var.set(f"Selecting: {int(round(width))} x {int(round(height))}")
+        self.status_var.set(
+            self.tr("Selecting: {width} x {height}").format(
+                width=int(round(width)),
+                height=int(round(height)),
+            )
+        )
 
     def _on_release(self, event: tk.Event) -> None:
         self._on_drag(event)
@@ -843,7 +1059,7 @@ class RoiSelectorDialog:
             self.canvas.delete(self.rect_id)
             self.rect_id = None
         self.result = None
-        self.status_var.set("Drag to select the slide region.")
+        self.status_var.set(self.tr("Drag to select the slide region."))
 
     def _cancel(self) -> None:
         self.result = None
@@ -851,7 +1067,11 @@ class RoiSelectorDialog:
 
     def _confirm(self) -> None:
         if self.drag_start is None or self.rect_id is None:
-            messagebox.showinfo("Region Selection", "Drag to select a capture region first.", parent=self.top)
+            messagebox.showinfo(
+                self.tr("Region Selection"),
+                self.tr("Drag to select a capture region first."),
+                parent=self.top,
+            )
             return
 
         coords = self.canvas.coords(self.rect_id)
@@ -863,7 +1083,11 @@ class RoiSelectorDialog:
         width = int(round(abs(x1 - x0) / self.scale))
         height = int(round(abs(y1 - y0) / self.scale))
         if width <= 0 or height <= 0:
-            messagebox.showinfo("Region Selection", "Select a region with width and height greater than zero.", parent=self.top)
+            messagebox.showinfo(
+                self.tr("Region Selection"),
+                self.tr("Select a region with width and height greater than zero."),
+                parent=self.top,
+            )
             return
         self.result = (left, top, width, height)
         self.top.destroy()
@@ -881,6 +1105,13 @@ class CaptureApp:
         self.sc = capture_module
         self.window_mode_supported = bool(getattr(self.sc, "WINDOW_CAPTURE_SUPPORTED", False))
         self.window_backend_choices = tuple(getattr(self.sc, "WINDOW_BACKEND_CHOICES", ("auto",)))
+        self.language_code = load_language()
+        os.environ["LECTURE_SLIDE_CAPTURE_LANGUAGE"] = self.language_code
+        if hasattr(self.sc, "set_language"):
+            try:
+                self.sc.set_language(self.language_code)
+            except Exception:
+                pass
         self.Image = Image
         self.ImageDraw = ImageDraw
         self.ImageTk = ImageTk
@@ -909,8 +1140,10 @@ class CaptureApp:
         self.saved_strip_snapshot: Optional[tuple[str, int, str]] = None
         self.saved_strip_thumb_refs: list[Any] = []
         self.capture_started_at: Optional[datetime] = None
-        self.gallery_header_var = tk.StringVar(value="No session is open yet.")
-        self.pause_button_text = tk.StringVar(value="Pause")
+        self.gallery_header_var = tk.StringVar(value=self.tr("No session is open yet."))
+        self.pause_button_source = "Pause"
+        self.pause_button_text = tk.StringVar(value=self.tr(self.pause_button_source))
+        self.language_var = tk.StringVar(value=LANGUAGE_NAMES[self.language_code])
 
         self.log_queue: "queue.Queue[str]" = queue.Queue()
         LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -930,8 +1163,9 @@ class CaptureApp:
         self.make_pdf_var = tk.BooleanVar(value=True)
         self.keep_duplicates_var = tk.BooleanVar(value=False)
         self.pause_on_cursor_var = tk.BooleanVar(value=True)
-        self.selection_summary_var = tk.StringVar(value="No capture region has been selected yet.")
-        self.session_status_var = tk.StringVar(value="Idle")
+        self.selection_summary_var = tk.StringVar(value=self.tr("No capture region has been selected yet."))
+        self.session_status_source = "Idle"
+        self.session_status_var = tk.StringVar(value=self.tr(self.session_status_source))
         self.saved_count_var = tk.StringVar(value="0")
         self.duplicate_count_var = tk.StringVar(value="0")
         self.session_dir_var = tk.StringVar(value="-")
@@ -942,8 +1176,82 @@ class CaptureApp:
         self._build_ui()
         self._sync_source_mode_ui()
         self._refresh_windows()
-        self._append_log("Lecture Slide Capture GUI is ready")
+        self._append_log(self.tr("Lecture Slide Capture GUI is ready"))
         self.root.after(180, self._tick)
+
+    def tr(self, text: str) -> str:
+        return translate_text(text, self.language_code)
+
+    def tr_format(self, text: str, **values: Any) -> str:
+        return self.tr(text).format(**values)
+
+    def _set_status(self, source_text: str) -> None:
+        self.session_status_source = source_text
+        self.session_status_var.set(self.tr(source_text))
+
+    def _set_pause_button(self, source_text: str) -> None:
+        self.pause_button_source = source_text
+        self.pause_button_text.set(self.tr(source_text))
+
+    def _source_text_for_current_language(self, text: str) -> str:
+        reverse = {translated: source for source, translated in TRANSLATIONS.get(self.language_code, {}).items()}
+        return reverse.get(text, text)
+
+    def _apply_language_to_widget_tree(self, widget: tk.Misc) -> None:
+        try:
+            text = widget.cget("text")
+        except Exception:
+            text = ""
+        if text:
+            source_text = getattr(widget, "_i18n_source_text", None)
+            if source_text is None:
+                source_text = self._source_text_for_current_language(str(text))
+                setattr(widget, "_i18n_source_text", source_text)
+            translated = self.tr(str(source_text))
+            if translated != text:
+                try:
+                    widget.configure(text=translated)
+                except Exception:
+                    pass
+        try:
+            children = widget.winfo_children()
+        except Exception:
+            children = []
+        for child in children:
+            self._apply_language_to_widget_tree(child)
+
+    def _language_changed(self, _event: Optional[tk.Event] = None) -> None:
+        selected_code = LANGUAGE_NAME_TO_CODE.get(self.language_var.get())
+        if selected_code is None or selected_code == self.language_code:
+            return
+        if self.capture_thread and self.capture_thread.is_alive():
+            self.language_var.set(LANGUAGE_NAMES[self.language_code])
+            messagebox.showinfo(
+                self.tr("Language"),
+                self.tr("Language can be changed after capture finishes."),
+                parent=self.root,
+            )
+            return
+
+        self.language_code = selected_code
+        save_language(selected_code)
+        if hasattr(self.sc, "set_language"):
+            try:
+                self.sc.set_language(selected_code)
+            except Exception:
+                pass
+        self.language_var.set(LANGUAGE_NAMES[selected_code])
+        self._set_status(self.session_status_source)
+        self._set_pause_button(self.pause_button_source)
+        self._update_selection_summary()
+        self._refresh_selection_preview_from_state()
+        self._refresh_saved_strip(force=True)
+        if self.gallery_window is not None:
+            self.gallery_window.title(self.tr("All Captures"))
+            self.gallery_snapshot = None
+            self._refresh_slides_gallery(force=True)
+        self._apply_language_to_widget_tree(self.root)
+        self._append_log(self.tr("[gui] Language setting changed."))
 
     def _configure_root(self) -> None:
         self.palette = {
@@ -1087,6 +1395,7 @@ class CaptureApp:
         app_header = ttk.Frame(shell, padding=(24, 20, 24, 10), style="Root.TFrame")
         app_header.grid(row=0, column=0, sticky="ew")
         app_header.columnconfigure(0, weight=1)
+        app_header.columnconfigure(1, weight=0)
         ttk.Label(app_header, text="LECTURE SLIDE CAPTURE", style="Eyebrow.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(app_header, text="Slide Capture Studio", style="Header.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
         ttk.Label(
@@ -1094,6 +1403,18 @@ class CaptureApp:
             text="Choose a lecture window, mark the slide region, capture changes, and generate a PDF from one screen.",
             style="Subheader.TLabel",
         ).grid(row=2, column=0, sticky="w", pady=(5, 0))
+        language_frame = ttk.Frame(app_header, style="Root.TFrame")
+        language_frame.grid(row=0, column=1, rowspan=3, sticky="ne", padx=(18, 0))
+        ttk.Label(language_frame, text="Language", style="Subheader.TLabel").grid(row=0, column=0, sticky="e")
+        self.language_combo = ttk.Combobox(
+            language_frame,
+            textvariable=self.language_var,
+            values=tuple(LANGUAGE_NAMES.values()),
+            state="readonly",
+            width=12,
+        )
+        self.language_combo.grid(row=1, column=0, sticky="e", pady=(6, 0))
+        self.language_combo.bind("<<ComboboxSelected>>", self._language_changed)
 
         scroll_host = ttk.Frame(shell, style="Root.TFrame")
         scroll_host.grid(row=1, column=0, sticky="nsew")
@@ -1506,6 +1827,7 @@ class CaptureApp:
         self.finish_button.pack(side="left", padx=(8, 0))
         self.view_slides_button = ttk.Button(action_row, text="View All Captures", command=self._open_slides_gallery)
         self.view_slides_button.pack(side="left", padx=(8, 0))
+        self._apply_language_to_widget_tree(shell)
 
     def _on_scroll_content_configure(self, _event: tk.Event) -> None:
         self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
@@ -1556,21 +1878,21 @@ class CaptureApp:
             return
         if self.engine.stopper.paused:
             self.engine.stopper.resume()
-            self.pause_button_text.set("Pause")
-            self.session_status_var.set("Capturing")
-            self._append_log("[gui] Capture resumed.")
+            self._set_pause_button("Pause")
+            self._set_status("Capturing")
+            self._append_log(self.tr("[gui] Capture resumed."))
         else:
             self.engine.stopper.pause()
-            self.pause_button_text.set("Resume")
-            self.session_status_var.set("Paused")
-            self._append_log("[gui] Capture paused.")
+            self._set_pause_button("Resume")
+            self._set_status("Paused")
+            self._append_log(self.tr("[gui] Capture paused."))
 
     def _finish_capture(self) -> None:
         if self.engine is None:
             return
         self.engine.stopper.request_stop()
-        self.session_status_var.set("Stopping")
-        self._append_log("[gui] Finish requested.")
+        self._set_status("Stopping")
+        self._append_log(self.tr("[gui] Finish requested."))
         self.pause_button.configure(state="disabled")
         self.finish_button.configure(state="disabled")
 
@@ -1620,12 +1942,14 @@ class CaptureApp:
             child.destroy()
         self.gallery_thumb_refs = []
 
-        self.gallery_header_var.set(f"Session folder: {output_root}\nSaved slides: {len(paths)}")
+        self.gallery_header_var.set(
+            self.tr_format("Session folder: {folder}\nSaved slides: {count}", folder=output_root, count=len(paths))
+        )
 
         if not paths:
             ttk.Label(
                 self.gallery_inner,
-                text="No saved slides yet.\nStart capture or wait for slide changes.",
+                text=self.tr("No saved slides yet.\nStart capture or wait for slide changes."),
                 justify="center",
             ).grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
             self._refresh_gallery_canvas()
@@ -1651,7 +1975,7 @@ class CaptureApp:
                 image_label.grid(row=0, column=0, sticky="nsew")
                 image_label.bind("<Button-1>", lambda _event, p=path: self._open_image_path(p))
             except Exception:
-                ttk.Label(card, text="Could not load preview.", anchor="center").grid(
+                ttk.Label(card, text=self.tr("Could not load preview."), anchor="center").grid(
                     row=0, column=0, sticky="nsew", pady=(20, 20)
                 )
 
@@ -1661,11 +1985,13 @@ class CaptureApp:
                 justify="left",
                 wraplength=260,
             ).grid(row=1, column=0, sticky="w", pady=(8, 0))
-            ttk.Button(card, text="Open File", command=lambda p=path: self._open_image_path(p)).grid(
+            ttk.Button(card, text=self.tr("Open File"), command=lambda p=path: self._open_image_path(p)).grid(
                 row=2, column=0, sticky="w", pady=(8, 0)
             )
 
         self._refresh_gallery_canvas()
+        if self.gallery_inner is not None:
+            self._apply_language_to_widget_tree(self.gallery_inner)
 
     def _open_slides_gallery(self) -> None:
         if self.gallery_window is not None and self.gallery_window.winfo_exists():
@@ -1675,7 +2001,7 @@ class CaptureApp:
             return
 
         self.gallery_window = tk.Toplevel(self.root)
-        self.gallery_window.title("All Captures")
+        self.gallery_window.title(self.tr("All Captures"))
         self.gallery_window.geometry("980x760")
         self.gallery_window.minsize(760, 560)
         self.gallery_window.transient(self.root)
@@ -1713,6 +2039,7 @@ class CaptureApp:
         self.gallery_canvas.bind("<Configure>", self._resize_gallery_canvas)
 
         self._refresh_slides_gallery(force=True)
+        self._apply_language_to_widget_tree(self.gallery_window)
 
     def _refresh_saved_strip(self, force: bool = False) -> None:
         if self.saved_strip_frame is None:
@@ -1733,7 +2060,7 @@ class CaptureApp:
         if not paths:
             ttk.Label(
                 self.saved_strip_frame,
-                text="No saved slides yet.",
+                text=self.tr("No saved slides yet."),
                 style="PanelSubheader.TLabel",
             ).grid(row=0, column=0, sticky="w")
             return
@@ -1758,7 +2085,7 @@ class CaptureApp:
                 image_label.grid(row=0, column=0, sticky="nsew", padx=6, pady=(6, 0))
                 image_label.bind("<Button-1>", lambda _event, p=path: self._open_image_path(p))
             except Exception:
-                ttk.Label(cell, text="No preview", anchor="center").grid(row=0, column=0, padx=6, pady=(16, 12))
+                ttk.Label(cell, text=self.tr("No preview"), anchor="center").grid(row=0, column=0, padx=6, pady=(16, 12))
             ttk.Label(
                 cell,
                 text=path.name[:18] + ("..." if len(path.name) > 18 else ""),
@@ -1810,7 +2137,7 @@ class CaptureApp:
 
     def _browse_output_dir(self) -> None:
         chosen = filedialog.askdirectory(
-            title="Choose Base Output Folder",
+            title=self.tr("Choose Base Output Folder"),
             initialdir=str(normalize_output_base(self.output_base_var.get())),
             parent=self.root,
         )
@@ -1850,13 +2177,13 @@ class CaptureApp:
                 selectcolor=active_bg if screen_active else idle_bg,
                 font=ui_font("text", 12, "bold") if screen_active else ui_font("text", 12),
             )
-        self.pick_region_button.configure(text="Select Slide Region" if is_window_mode else "Select Screen Region")
+        self.pick_region_button.configure(text=self.tr("Select Slide Region" if is_window_mode else "Select Screen Region"))
         self._update_selection_summary()
         self._refresh_selection_preview_from_state()
 
     def _format_window_item(self, item: Dict[str, Any], index: int) -> str:
-        title = item.get("window_title") or "(Untitled)"
-        owner = item.get("window_owner") or "(Unknown App)"
+        title = item.get("window_title") or self.tr("(Untitled)")
+        owner = item.get("window_owner") or self.tr("(Unknown App)")
         return (
             f"{index:02d}. id={item['window_id']}  {owner}  "
             f"{item['width']}x{item['height']}  {title}"
@@ -1868,7 +2195,7 @@ class CaptureApp:
         if not self.window_mode_supported:
             self.window_candidates = []
             self.window_listbox.delete(0, "end")
-            self.selection_summary_var.set("Window capture is not available on this platform. Use screen-region capture instead.")
+            self.selection_summary_var.set(self.tr("Window capture is not available on this platform. Use screen-region capture instead."))
             return
         try:
             owner_filter = self.window_owner_var.get().strip() or None
@@ -1877,7 +2204,7 @@ class CaptureApp:
             if not candidates and owner_filter == "Google Chrome":
                 candidates = self.sc.list_candidate_windows("Chrome", title_filter)
         except Exception as exc:
-            messagebox.showerror("Window List Failed", str(exc), parent=self.root)
+            messagebox.showerror(self.tr("Window List Failed"), str(exc), parent=self.root)
             return
 
         self.window_candidates = candidates
@@ -1892,8 +2219,8 @@ class CaptureApp:
             self._on_window_selected()
         else:
             self.window_selection = None
-            self.selection_summary_var.set("No matching window found. Bring the Chrome lecture window forward and try again.")
-            self.selection_image_label.configure(image="", text="No window to display.")
+            self.selection_summary_var.set(self.tr("No matching window found. Bring the Chrome lecture window forward and try again."))
+            self.selection_image_label.configure(image="", text=self.tr("No window to display."))
             self.preview_photo = None
 
     def _on_window_selected(self, _event: Optional[tk.Event] = None) -> None:
@@ -1920,34 +2247,52 @@ class CaptureApp:
         if self.source_mode_var.get() == "window":
             window = self._current_window_candidate()
             if window is None:
-                self.selection_summary_var.set("Select the Chrome window to capture.")
+                self.selection_summary_var.set(self.tr("Select the Chrome window to capture."))
                 return
-            title = window.get("window_title") or "(Untitled)"
-            summary = (
-                f"Target window: {window.get('window_owner', '')} / {title}\n"
-                f"Window ID: {window['window_id']}  Size: {window['width']} x {window['height']}"
+            title = window.get("window_title") or self.tr("(Untitled)")
+            summary = self.tr_format(
+                "Target window: {owner} / {title}\nWindow ID: {window_id}  Size: {width} x {height}",
+                owner=window.get("window_owner", ""),
+                title=title,
+                window_id=window["window_id"],
+                width=window["width"],
+                height=window["height"],
             )
             if self.window_selection and self.window_selection.window.get("window_id") == window.get("window_id"):
                 x, y, w, h = self.window_selection.roi
-                summary += f"\nSelected slide region: left={x}, top={y}, width={w}, height={h}"
+                summary += self.tr_format(
+                    "\nSelected slide region: left={left}, top={top}, width={width}, height={height}",
+                    left=x,
+                    top=y,
+                    width=w,
+                    height=h,
+                )
             else:
-                summary += "\nNo slide region has been selected yet."
+                summary += self.tr("\nNo slide region has been selected yet.")
             self.selection_summary_var.set(summary)
             return
 
         if self.screen_selection:
             region = self.screen_selection.region
             self.selection_summary_var.set(
-                "Select the ROI directly from the full screen.\n"
-                f"Selected region: left={region['left']}, top={region['top']}, "
-                f"width={region['width']}, height={region['height']}"
+                self.tr_format(
+                    "Select the ROI directly from the full screen.\nSelected region: left={left}, top={top}, width={width}, height={height}",
+                    left=region["left"],
+                    top=region["top"],
+                    width=region["width"],
+                    height=region["height"],
+                )
             )
         else:
-            self.selection_summary_var.set("Screen capture mode. Select the capture region first.")
+            self.selection_summary_var.set(self.tr("Screen capture mode. Select the capture region first."))
 
     def _choose_region(self) -> None:
         if self.capture_thread and self.capture_thread.is_alive():
-            messagebox.showinfo("Capture Running", "You cannot choose a new region while capture is running.", parent=self.root)
+            messagebox.showinfo(
+                self.tr("Capture Running"),
+                self.tr("You cannot choose a new region while capture is running."),
+                parent=self.root,
+            )
             return
 
         self.root.configure(cursor="watch")
@@ -1955,11 +2300,19 @@ class CaptureApp:
         try:
             if self.source_mode_var.get() == "window":
                 if not self.window_mode_supported:
-                    messagebox.showinfo("Window Capture", "Window capture is not available on this platform.", parent=self.root)
+                    messagebox.showinfo(
+                        self.tr("Window Capture"),
+                        self.tr("Window capture is not available on this platform."),
+                        parent=self.root,
+                    )
                     return
                 candidate = self._current_window_candidate()
                 if candidate is None:
-                    messagebox.showinfo("Select Target Window", "Select a window to capture first.", parent=self.root)
+                    messagebox.showinfo(
+                        self.tr("Select Target Window"),
+                        self.tr("Select a window to capture first."),
+                        parent=self.root,
+                    )
                     return
                 source = self.sc.create_window_source(
                     window_id=int(candidate["window_id"]),
@@ -1977,6 +2330,7 @@ class CaptureApp:
                     preview,
                     "Select Slide Region Inside Window",
                     "Drag over the slide area in the selected window snapshot.",
+                    self.language_code,
                 )
                 roi = dialog.show()
                 if roi is None:
@@ -1995,6 +2349,7 @@ class CaptureApp:
                     preview,
                     "Select Screen Region",
                     "Drag over the screen area where the lecture slide is visible.",
+                    self.language_code,
                 )
                 roi = dialog.show()
                 if roi is None:
@@ -2010,7 +2365,7 @@ class CaptureApp:
                 self._display_selection_preview(preview, roi)
         except Exception as exc:
             traceback.print_exc()
-            messagebox.showerror("Region Selection Failed", str(exc), parent=self.root)
+            messagebox.showerror(self.tr("Region Selection Failed"), str(exc), parent=self.root)
         finally:
             self.root.configure(cursor="")
             self._update_selection_summary()
@@ -2039,13 +2394,13 @@ class CaptureApp:
             ):
                 self._display_selection_preview(self.window_selection.preview_bgr, self.window_selection.roi)
                 return
-            self._clear_selection_preview("No slide region has been selected for the chosen window yet.")
+            self._clear_selection_preview(self.tr("No slide region has been selected for the chosen window yet."))
             return
 
         if self.screen_selection is not None:
             self._display_selection_preview(self.screen_selection.preview_bgr, self.screen_selection.roi)
             return
-        self._clear_selection_preview("No screen region has been selected yet.")
+        self._clear_selection_preview(self.tr("No screen region has been selected yet."))
 
     def _display_last_saved_preview(self, path: Path) -> None:
         try:
@@ -2061,9 +2416,9 @@ class CaptureApp:
         try:
             value = float(self.interval_var.get().strip())
         except ValueError as exc:
-            raise RuntimeError("Enter a numeric sampling interval.") from exc
+            raise RuntimeError(self.tr("Enter a numeric sampling interval.")) from exc
         if value < 0.10:
-            raise RuntimeError("The sampling interval must be at least 0.10 seconds.")
+            raise RuntimeError(self.tr("The sampling interval must be at least 0.10 seconds."))
         return value
 
     def _build_output_dir(self) -> Path:
@@ -2083,12 +2438,12 @@ class CaptureApp:
     def _create_capture_source(self, output_dir: Path) -> Any:
         if self.source_mode_var.get() == "window":
             if not self.window_mode_supported:
-                raise RuntimeError("Window capture is not available on this platform. Use screen-region capture instead.")
+                raise RuntimeError(self.tr("Window capture is not available on this platform. Use screen-region capture instead."))
             candidate = self._current_window_candidate()
             if candidate is None:
-                raise RuntimeError("Select a window to capture.")
+                raise RuntimeError(self.tr("Select a window to capture."))
             if self.window_selection is None or self.window_selection.window.get("window_id") != candidate.get("window_id"):
-                raise RuntimeError("Select a slide region for the chosen window first.")
+                raise RuntimeError(self.tr("Select a slide region for the chosen window first."))
             source = self.sc.create_window_source(
                 window_id=int(candidate["window_id"]),
                 window_owner=str(candidate["window_owner"]),
@@ -2101,7 +2456,7 @@ class CaptureApp:
             source.set_roi_from_pixels(x, y, w, h, source_w, source_h)
         else:
             if self.screen_selection is None:
-                raise RuntimeError("Select a screen region to capture first.")
+                raise RuntimeError(self.tr("Select a screen region to capture first."))
             source = self.sc.ScreenRegionSource(
                 self.screen_selection.region,
                 pause_on_cursor_in_roi=self.pause_on_cursor_var.get(),
@@ -2119,7 +2474,7 @@ class CaptureApp:
             output_dir = self._build_output_dir()
             capture_source = self._create_capture_source(output_dir)
         except Exception as exc:
-            messagebox.showerror("Capture Start Failed", str(exc), parent=self.root)
+            messagebox.showerror(self.tr("Capture Start Failed"), str(exc), parent=self.root)
             return
 
         config = self.sc.Config(sample_interval=interval)
@@ -2144,11 +2499,11 @@ class CaptureApp:
         self.session_dir_var.set(str(output_dir))
         self.last_saved_var.set("-")
         self.elapsed_var.set("00:00")
-        self.saved_image_label.configure(image="", text="The latest saved slide will appear here after capture starts.")
+        self.saved_image_label.configure(image="", text=self.tr("The latest saved slide will appear here after capture starts."))
         self.last_saved_photo = None
-        self.session_status_var.set("Capturing")
-        self._append_log(f"[gui] Session started: {output_dir}")
-        self.pause_button_text.set("Pause")
+        self._set_status("Capturing")
+        self._append_log(self.tr_format("[gui] Session started: {output_dir}", output_dir=output_dir))
+        self._set_pause_button("Pause")
         self.gallery_snapshot = None
         self.saved_strip_snapshot = None
         self._refresh_saved_strip(force=True)
@@ -2182,27 +2537,28 @@ class CaptureApp:
         self.start_button.configure(state="normal")
         self.pause_button.configure(state="disabled")
         self.finish_button.configure(state="disabled")
-        self.pause_button_text.set("Pause")
+        self._set_pause_button("Pause")
         self.pick_region_button.configure(state="normal")
         self.refresh_button.configure(state="normal" if self.source_mode_var.get() == "window" else "disabled")
 
         if self.run_error:
-            self.session_status_var.set("Ended with Error")
+            self._set_status("Ended with Error")
             if not self.close_requested:
                 show_long_message(
                     self.root,
-                    "Capture Error",
-                    "An error occurred during capture. Check the log below.",
+                    self.tr("Capture Error"),
+                    self.tr("An error occurred during capture. Check the log below."),
                     self.run_error,
+                    self.language_code,
                 )
         else:
-            self.session_status_var.set("Complete")
+            self._set_status("Complete")
             saved = self.engine.capture_count if self.engine is not None else 0
             duplicates = self.engine.duplicate_skip_count if self.engine is not None else 0
             if not self.close_requested:
                 messagebox.showinfo(
-                    "Capture Complete",
-                    f"Saved slides: {saved}\nDuplicate slides skipped: {duplicates}",
+                    self.tr("Capture Complete"),
+                    self.tr_format("Saved slides: {saved}\nDuplicate slides skipped: {duplicates}", saved=saved, duplicates=duplicates),
                     parent=self.root,
                 )
 
@@ -2241,8 +2597,8 @@ class CaptureApp:
     def _on_close(self) -> None:
         if self.capture_thread and self.capture_thread.is_alive():
             should_stop = messagebox.askyesno(
-                "Finish Capture",
-                "Capture is still running. Send a finish request and close the window?\nA PDF will be generated from the slides saved so far.",
+                self.tr("Finish Capture"),
+                self.tr("Capture is still running. Send a finish request and close the window?\nA PDF will be generated from the slides saved so far."),
                 parent=self.root,
             )
             if not should_stop:
@@ -2286,9 +2642,11 @@ def import_capture_module() -> Any:
 def main() -> None:
     enable_windows_dpi_awareness()
     maybe_reexec_with_usable_python()
+    language_code = load_language()
+    os.environ["LECTURE_SLIDE_CAPTURE_LANGUAGE"] = language_code
     print(f"[gui-start] executable={sys.executable}")
     root = tk.Tk()
-    show_bootstrap_screen(root, "Preparing the app.\nChecking required modules and the capture engine.")
+    show_bootstrap_screen(root, translate_text("Preparing the app.\nChecking required modules and the capture engine.", language_code))
     missing = discover_missing_modules()
     if missing:
         missing_text = ", ".join(missing)
@@ -2303,7 +2661,7 @@ def main() -> None:
 
         print(f"[install-required] missing={missing_text}")
         print(f"[install-required] command={install_command}")
-        show_install_screen(root, missing_text, install_command, clipboard_ready)
+        show_install_screen(root, missing_text, install_command, clipboard_ready, language_code)
         root.mainloop()
         return
 
@@ -2316,9 +2674,10 @@ def main() -> None:
         print(details)
         show_error_screen(
             root,
-            "Initialization Failed",
-            "Could not load the capture module. Check the details below.",
+            translate_text("Initialization Failed", language_code),
+            translate_text("Could not load the capture module. Check the details below.", language_code),
             details,
+            language_code,
         )
         root.mainloop()
         return

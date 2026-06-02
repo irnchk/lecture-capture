@@ -31,6 +31,7 @@ The app is designed for privacy-sensitive study workflows:
 - Generate `slides.pdf` when the session ends.
 - Pause, resume, and finish capture safely.
 - Remember the output directory between sessions.
+- Switch between English and Korean from the app language setting.
 - Package a runnable macOS `.app` bundle and Windows build files.
 
 ## Quick Start

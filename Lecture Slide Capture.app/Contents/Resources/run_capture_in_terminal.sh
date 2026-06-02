@@ -12,6 +12,7 @@ SCRIPT_PATH="$RES_DIR/slide_capture.py"
 REQ_PATH="$RES_DIR/requirements.txt"
 CONFIG_DIR="$HOME/Library/Application Support/LectureSlideCapture"
 OUTPUT_BASE_FILE="$CONFIG_DIR/output_base.txt"
+LANGUAGE_FILE="$CONFIG_DIR/language.txt"
 DEFAULT_OUTPUT_BASE="$HOME/Documents/Lecture Slide Capture"
 PYTHON_BIN="${PYTHON_BIN:-$(command -v python3 || true)}"
 
@@ -38,14 +39,36 @@ load_output_base() {
   normalize_path "$value"
 }
 
+load_language() {
+  local value="${LECTURE_SLIDE_CAPTURE_LANGUAGE:-}"
+  if [[ -z "$value" && -f "$LANGUAGE_FILE" ]]; then
+    value="$(cat "$LANGUAGE_FILE" 2>/dev/null || true)"
+  fi
+  case "$value" in
+    ko*|KO*) printf 'ko' ;;
+    *) printf 'en' ;;
+  esac
+}
+
+t() {
+  local en="$1"
+  local ko="${2:-$1}"
+  if [[ "$LANGUAGE" == "ko" ]]; then
+    printf '%s' "$ko"
+  else
+    printf '%s' "$en"
+  fi
+}
+
 OUTPUT_BASE="$(load_output_base)"
+LANGUAGE="$(load_language)"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 OUTPUT_DIR="$OUTPUT_BASE/$TIMESTAMP"
 
 pause_and_exit() {
   local status="${1:-0}"
   echo
-  read -r -p "Press Enter to close this window..." _ || true
+  read -r -p "$(t "Press Enter to close this window..." "엔터를 누르면 이 창을 닫습니다...")" _ || true
   exit "$status"
 }
 
@@ -53,22 +76,22 @@ print_header() {
   echo "=============================================="
   echo " Lecture Slide Capture"
   echo "=============================================="
-  echo "Mode: $MODE"
-  echo "Base output folder: $OUTPUT_BASE"
-  echo "Current session folder: $OUTPUT_DIR"
+  printf '%s %s\n' "$(t "Mode:" "모드:")" "$MODE"
+  printf '%s %s\n' "$(t "Base output folder:" "저장 기본 경로:")" "$OUTPUT_BASE"
+  printf '%s %s\n' "$(t "Current session folder:" "이번 세션 폴더:")" "$OUTPUT_DIR"
   if [[ -n "$WINDOW_ID" ]]; then
-    echo "Target window ID: $WINDOW_ID"
+    printf '%s %s\n' "$(t "Target window ID:" "대상 창 ID:")" "$WINDOW_ID"
   elif [[ "$MODE" == "capture" ]]; then
-    echo "Target window: choose from the current list"
+    echo "$(t "Target window: choose from the current list" "대상 창: 지금 목록에서 선택")"
   else
-    echo "Target window ID: auto-select"
+    echo "$(t "Target window ID: auto-select" "대상 창 ID: 자동 선택")"
   fi
   echo
 }
 
 if [[ -z "$PYTHON_BIN" ]]; then
-  echo "[error] Could not find python3."
-  echo "Install Python 3 and run again."
+  echo "$(t "[error] Could not find python3." "[오류] python3 를 찾지 못했습니다.")"
+  echo "$(t "Install Python 3 and run again." "Python 3 설치 후 다시 실행하세요.")"
   pause_and_exit 1
 fi
 
@@ -81,19 +104,19 @@ PY
 )"
 
 if [[ -n "$missing_modules" ]]; then
-  echo "[info] Some required Python packages are missing: $missing_modules"
-  read -r -p "Install them now? [Y/n] " INSTALL_REPLY || INSTALL_REPLY="Y"
+  printf '%s %s\n' "$(t "[info] Some required Python packages are missing:" "[안내] 필요한 Python 패키지가 일부 없습니다:")" "$missing_modules"
+  read -r -p "$(t "Install them now? [Y/n] " "지금 자동으로 설치할까요? [Y/n] ")" INSTALL_REPLY || INSTALL_REPLY="Y"
   INSTALL_REPLY="${INSTALL_REPLY:-Y}"
   case "$INSTALL_REPLY" in
     [Nn]*)
       echo
-      echo "Install with this command, then run again:"
+      echo "$(t "Install with this command, then run again:" "다음 명령으로 설치한 뒤 다시 실행하세요:")"
       echo "  python3 -m pip install --user -r \"$REQ_PATH\""
       pause_and_exit 1
       ;;
     *)
       echo
-      echo "Installing packages..."
+      echo "$(t "Installing packages..." "패키지를 설치합니다...")"
       "$PYTHON_BIN" -m pip install --user -r "$REQ_PATH"
       ;;
   esac
@@ -110,6 +133,7 @@ cmd=("$PYTHON_BIN" "$SCRIPT_PATH"
   --preview
   --mode slide
   --make-pdf
+  --language "$LANGUAGE"
 )
 
 if [[ "$MODE" == "list" ]]; then
@@ -117,6 +141,7 @@ if [[ "$MODE" == "list" ]]; then
     --capture-source window
     --window-owner "Google Chrome"
     --list-windows
+    --language "$LANGUAGE"
   )
 else
   cmd+=(--choose-window)
@@ -134,12 +159,16 @@ set -e
 echo
 if [[ "$STATUS" -eq 0 ]]; then
   if [[ "$MODE" == "capture" ]]; then
-    echo "[done] Output: $OUTPUT_DIR"
+    printf '%s %s\n' "$(t "[done] Output:" "[완료] 저장 위치:")" "$OUTPUT_DIR"
   else
-    echo "[done] Finished listing windows."
+    echo "$(t "[done] Finished listing windows." "[완료] 창 목록 표시를 마쳤습니다.")"
   fi
 else
-  echo "[exit] Program ended with status code $STATUS."
+  if [[ "$LANGUAGE" == "ko" ]]; then
+    printf '[종료] 프로그램이 상태 코드 %s 로 끝났습니다.\n' "$STATUS"
+  else
+    printf '[exit] Program ended with status code %s.\n' "$STATUS"
+  fi
 fi
 
 pause_and_exit "$STATUS"
