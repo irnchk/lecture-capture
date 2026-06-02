@@ -73,11 +73,7 @@ def platform_log_dir() -> Path:
 
 CONFIG_DIR = platform_config_dir()
 OUTPUT_BASE_FILE = CONFIG_DIR / "output_base.txt"
-DEFAULT_OUTPUT_BASE = (
-    Path.home() / "Documents" / "Lecture Slide Capture"
-    if sys.platform == "win32"
-    else Path.home() / ".hermes" / "workspace" / "NoteSources"
-)
+DEFAULT_OUTPUT_BASE = Path.home() / "Documents" / "Lecture Slide Capture"
 LOG_DIR = platform_log_dir()
 GUI_LOG_PATH = LOG_DIR / "gui_session.log"
 
@@ -306,7 +302,7 @@ def get_python_bin() -> str:
     found = shutil.which("python3")
     if found:
         return found
-    raise RuntimeError("python3 실행 파일을 찾지 못했습니다.")
+    raise RuntimeError("Could not find a python3 executable.")
 
 
 def build_install_command() -> str:
@@ -339,7 +335,7 @@ def show_long_message(parent: tk.Misc, title: str, message: str, details: str) -
 
     button_row = ttk.Frame(outer)
     button_row.pack(fill="x", pady=(12, 0))
-    ttk.Button(button_row, text="닫기", command=dialog.destroy).pack(side="right")
+    ttk.Button(button_row, text="Close", command=dialog.destroy).pack(side="right")
 
     dialog.wait_window()
 
@@ -460,8 +456,8 @@ def show_error_screen(root: tk.Tk, title: str, message: str, details: str) -> No
         except Exception:
             pass
 
-    tk.Button(button_row, text="내용 복사", command=copy_details, padx=14, pady=6).pack(side="left")
-    tk.Button(button_row, text="닫기", command=root.destroy, padx=16, pady=6).pack(side="right")
+    tk.Button(button_row, text="Copy Details", command=copy_details, padx=14, pady=6).pack(side="left")
+    tk.Button(button_row, text="Close", command=root.destroy, padx=16, pady=6).pack(side="right")
 
     present_root_window(root, 900, 620)
 
@@ -480,20 +476,20 @@ echo "=============================================="
 echo " Lecture Slide Capture"
 echo "=============================================="
 echo
-echo "필수 패키지가 아직 설치되지 않았습니다."
+echo "Required Python packages are not installed yet."
 echo
-echo "누락 항목:"
+echo "Missing modules:"
 printf '%s\\n' "$MISSING_TEXT"
 echo
-echo "아래 명령을 그대로 실행하세요:"
+echo "Run this command:"
 echo
 printf '%s\\n\\n' "$INSTALL_CMD"
 if command -v pbcopy >/dev/null 2>&1; then
   printf '%s' "$INSTALL_CMD" | pbcopy
-  echo "(설치 명령을 클립보드에 복사했습니다.)"
+  echo "(The install command has been copied to the clipboard.)"
   echo
 fi
-read -r -p "엔터를 누르면 이 창을 닫습니다..." _
+read -r -p "Press Enter to close this window..." _
 """
     script_path.write_text(script_text, encoding="utf-8")
     script_path.chmod(0o755)
@@ -534,7 +530,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
 
     tk.Label(
         outer,
-        text="캡처에 필요한 Python 패키지가 아직 설치되지 않았습니다.",
+        text="Required Python packages are not installed yet.",
         bg="#f5f1e8",
         fg="#1f2937",
         font=ui_font("display", 15, "bold"),
@@ -544,7 +540,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
 
     tk.Label(
         outer,
-        text=f"누락 항목: {missing_text}",
+        text=f"Missing modules: {missing_text}",
         bg="#f5f1e8",
         fg="#374151",
         font=ui_font("text", 12),
@@ -555,12 +551,12 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
     ).pack(fill="x", anchor="w")
 
     note_text = (
-        "앱 안에서는 자동 설치를 진행하지 않습니다.\n"
-        "아래 명령을 Terminal에서 직접 실행한 뒤 앱을 다시 열어 주세요.\n"
-        "원하면 Terminal 창을 자동으로 열어 안내만 표시할 수도 있습니다."
+        "The app does not install packages automatically.\n"
+        "Run the command below in Terminal, then reopen the app.\n"
+        "You can also open a Terminal window with the command prepared."
     )
     if clipboard_ready:
-        note_text += "\n설치 명령은 클립보드에도 복사해 두었습니다."
+        note_text += "\nThe install command has also been copied to the clipboard."
 
     tk.Label(
         outer,
@@ -592,7 +588,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
 
     footer = tk.Label(
         outer,
-        text="1. Terminal 열기  2. 명령 실행  3. 설치 완료 후 앱 다시 실행",
+        text="1. Open Terminal  2. Run the command  3. Reopen the app after installation",
         bg="#f5f1e8",
         fg="#6b7280",
         font=ui_font("text", 11),
@@ -613,21 +609,21 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
     button_row.pack(fill="x")
     tk.Button(
         button_row,
-        text="명령 복사",
+        text="Copy Command",
         command=copy_command,
         padx=14,
         pady=6,
     ).pack(side="left")
     tk.Button(
         button_row,
-        text="Terminal에서 열기",
+        text="Open in Terminal",
         command=lambda: open_install_command_in_terminal(install_command, missing_text),
         padx=14,
         pady=6,
     ).pack(side="left", padx=(8, 0))
     tk.Button(
         button_row,
-        text="닫기",
+        text="Close",
         command=root.destroy,
         padx=16,
         pady=6,
@@ -741,7 +737,7 @@ class RoiSelectorDialog:
             justify="left",
             wraplength=min(1200, self.viewport_width),
         ).grid(row=0, column=0, sticky="w")
-        self.status_var = tk.StringVar(value="드래그해서 슬라이드 영역을 선택하세요.")
+        self.status_var = tk.StringVar(value="Drag to select the slide region.")
         ttk.Label(outer, textvariable=self.status_var, foreground="#355c7d").grid(
             row=1,
             column=0,
@@ -782,9 +778,9 @@ class RoiSelectorDialog:
 
         button_row = ttk.Frame(outer)
         button_row.grid(row=3, column=0, sticky="ew", pady=(12, 0))
-        ttk.Button(button_row, text="초기화", command=self._reset).pack(side="left")
-        ttk.Button(button_row, text="취소", command=self._cancel).pack(side="right")
-        ttk.Button(button_row, text="확인", command=self._confirm).pack(side="right", padx=(0, 8))
+        ttk.Button(button_row, text="Reset", command=self._reset).pack(side="left")
+        ttk.Button(button_row, text="Cancel", command=self._cancel).pack(side="right")
+        ttk.Button(button_row, text="Confirm", command=self._confirm).pack(side="right", padx=(0, 8))
 
         self.top.bind("<Escape>", lambda _event: self._cancel())
         self.top.bind("<Return>", lambda _event: self._confirm())
@@ -836,7 +832,7 @@ class RoiSelectorDialog:
         )
         width = abs(x1 - x0)
         height = abs(y1 - y0)
-        self.status_var.set(f"선택 중: {int(round(width))} x {int(round(height))}")
+        self.status_var.set(f"Selecting: {int(round(width))} x {int(round(height))}")
 
     def _on_release(self, event: tk.Event) -> None:
         self._on_drag(event)
@@ -847,7 +843,7 @@ class RoiSelectorDialog:
             self.canvas.delete(self.rect_id)
             self.rect_id = None
         self.result = None
-        self.status_var.set("드래그해서 슬라이드 영역을 선택하세요.")
+        self.status_var.set("Drag to select the slide region.")
 
     def _cancel(self) -> None:
         self.result = None
@@ -855,7 +851,7 @@ class RoiSelectorDialog:
 
     def _confirm(self) -> None:
         if self.drag_start is None or self.rect_id is None:
-            messagebox.showinfo("영역 선택", "먼저 드래그해서 캡처할 영역을 선택해 주세요.", parent=self.top)
+            messagebox.showinfo("Region Selection", "Drag to select a capture region first.", parent=self.top)
             return
 
         coords = self.canvas.coords(self.rect_id)
@@ -867,7 +863,7 @@ class RoiSelectorDialog:
         width = int(round(abs(x1 - x0) / self.scale))
         height = int(round(abs(y1 - y0) / self.scale))
         if width <= 0 or height <= 0:
-            messagebox.showinfo("영역 선택", "너비와 높이가 1 이상인 영역을 선택해 주세요.", parent=self.top)
+            messagebox.showinfo("Region Selection", "Select a region with width and height greater than zero.", parent=self.top)
             return
         self.result = (left, top, width, height)
         self.top.destroy()
@@ -913,8 +909,8 @@ class CaptureApp:
         self.saved_strip_snapshot: Optional[tuple[str, int, str]] = None
         self.saved_strip_thumb_refs: list[Any] = []
         self.capture_started_at: Optional[datetime] = None
-        self.gallery_header_var = tk.StringVar(value="아직 열린 세션이 없습니다.")
-        self.pause_button_text = tk.StringVar(value="일시정지")
+        self.gallery_header_var = tk.StringVar(value="No session is open yet.")
+        self.pause_button_text = tk.StringVar(value="Pause")
 
         self.log_queue: "queue.Queue[str]" = queue.Queue()
         LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -934,8 +930,8 @@ class CaptureApp:
         self.make_pdf_var = tk.BooleanVar(value=True)
         self.keep_duplicates_var = tk.BooleanVar(value=False)
         self.pause_on_cursor_var = tk.BooleanVar(value=True)
-        self.selection_summary_var = tk.StringVar(value="아직 캡처 영역이 선택되지 않았습니다.")
-        self.session_status_var = tk.StringVar(value="대기 중")
+        self.selection_summary_var = tk.StringVar(value="No capture region has been selected yet.")
+        self.session_status_var = tk.StringVar(value="Idle")
         self.saved_count_var = tk.StringVar(value="0")
         self.duplicate_count_var = tk.StringVar(value="0")
         self.session_dir_var = tk.StringVar(value="-")
@@ -946,7 +942,7 @@ class CaptureApp:
         self._build_ui()
         self._sync_source_mode_ui()
         self._refresh_windows()
-        self._append_log("Lecture Slide Capture GUI 준비 완료")
+        self._append_log("Lecture Slide Capture GUI is ready")
         self.root.after(180, self._tick)
 
     def _configure_root(self) -> None:
@@ -1092,10 +1088,10 @@ class CaptureApp:
         app_header.grid(row=0, column=0, sticky="ew")
         app_header.columnconfigure(0, weight=1)
         ttk.Label(app_header, text="LECTURE SLIDE CAPTURE", style="Eyebrow.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(app_header, text="슬라이드 캡처 스튜디오", style="Header.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
+        ttk.Label(app_header, text="Slide Capture Studio", style="Header.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
         ttk.Label(
             app_header,
-            text="강의 창 선택부터 슬라이드 영역 지정, 자동 저장과 PDF 생성까지 한 화면에서 관리합니다.",
+            text="Choose a lecture window, mark the slide region, capture changes, and generate a PDF from one screen.",
             style="Subheader.TLabel",
         ).grid(row=2, column=0, sticky="w", pady=(5, 0))
 
@@ -1202,8 +1198,8 @@ class CaptureApp:
 
         source_group = make_card(
             setup_frame,
-            "1  소스",
-            "강의가 표시되는 창 또는 화면 영역을 고릅니다.",
+            "1  Source",
+            "Choose the window or screen region that shows the lecture.",
             accent=self.palette["info"],
             step_number="1",
             row=0,
@@ -1225,7 +1221,7 @@ class CaptureApp:
 
         self.window_mode_button = tk.Radiobutton(
             segmented,
-            text="Chrome 창 고정 캡처",
+            text="Capture Chrome Window",
             variable=self.source_mode_var,
             value="window",
             command=self._sync_source_mode_ui,
@@ -1245,7 +1241,7 @@ class CaptureApp:
         self.window_mode_button.grid(row=0, column=0, sticky="nsew", padx=(3, 2), pady=3)
         self.screen_mode_button = tk.Radiobutton(
             segmented,
-            text="화면 영역 직접 캡처",
+            text="Capture Screen Region",
             variable=self.source_mode_var,
             value="screen",
             command=self._sync_source_mode_ui,
@@ -1264,13 +1260,13 @@ class CaptureApp:
         )
         self.screen_mode_button.grid(row=0, column=1, sticky="nsew", padx=(2, 3), pady=3)
 
-        ttk.Label(source_group, text="앱 이름 필터").grid(row=1, column=0, sticky="w", pady=(12, 0))
+        ttk.Label(source_group, text="App Name Filter").grid(row=1, column=0, sticky="w", pady=(12, 0))
         self.owner_entry = ttk.Entry(source_group, textvariable=self.window_owner_var)
         self.owner_entry.grid(row=1, column=1, sticky="ew", pady=(12, 0))
-        ttk.Label(source_group, text="창 제목 필터").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(source_group, text="Window Title Filter").grid(row=2, column=0, sticky="w", pady=(8, 0))
         self.title_entry = ttk.Entry(source_group, textvariable=self.window_title_var)
         self.title_entry.grid(row=2, column=1, sticky="ew", pady=(8, 0))
-        ttk.Label(source_group, text="창 캡처 백엔드").grid(row=3, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(source_group, text="Window Capture Backend").grid(row=3, column=0, sticky="w", pady=(8, 0))
         self.backend_combo = ttk.Combobox(
             source_group,
             textvariable=self.window_backend_var,
@@ -1282,7 +1278,7 @@ class CaptureApp:
         window_group = source_group
         button_row = ttk.Frame(window_group, style="Panel.TFrame")
         button_row.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(12, 0))
-        self.refresh_button = ttk.Button(button_row, text="창 목록 새로고침", command=self._refresh_windows)
+        self.refresh_button = ttk.Button(button_row, text="Refresh Window List", command=self._refresh_windows)
         self.refresh_button.pack(side="left")
 
         self.window_listbox = tk.Listbox(
@@ -1304,8 +1300,8 @@ class CaptureApp:
 
         region_group = make_card(
             setup_frame,
-            "2  영역",
-            "슬라이드가 보이는 부분만 ROI로 지정합니다.",
+            "2  Region",
+            "Mark only the visible slide area as the ROI.",
             accent=self.palette["accent"],
             step_number="2",
             row=1,
@@ -1321,13 +1317,13 @@ class CaptureApp:
             justify="left",
             style="PanelSubheader.TLabel",
         ).grid(row=0, column=0, sticky="ew")
-        self.pick_region_button = ttk.Button(region_group, text="슬라이드 영역 선택", command=self._choose_region)
+        self.pick_region_button = ttk.Button(region_group, text="Select Slide Region", command=self._choose_region)
         self.pick_region_button.grid(row=1, column=0, sticky="ew", pady=(12, 0))
 
         capture_group = make_card(
             setup_frame,
-            "3  캡처",
-            "저장 위치와 감지 옵션을 확인한 뒤 시작합니다.",
+            "3  Capture",
+            "Confirm the output location and detection options, then start.",
             accent=self.palette["success"],
             step_number="3",
             row=2,
@@ -1337,30 +1333,30 @@ class CaptureApp:
         )
         capture_group.columnconfigure(1, weight=1)
         capture_group.columnconfigure(3, weight=1)
-        ttk.Label(capture_group, text="저장 기본 경로").grid(row=0, column=0, sticky="w")
+        ttk.Label(capture_group, text="Base Output Folder").grid(row=0, column=0, sticky="w")
         self.output_entry = ttk.Entry(capture_group, textvariable=self.output_base_var)
         self.output_entry.grid(row=0, column=1, sticky="ew", padx=(10, 8))
-        ttk.Button(capture_group, text="찾아보기", command=self._browse_output_dir).grid(row=0, column=2)
-        ttk.Label(capture_group, text="감지 모드").grid(row=1, column=0, sticky="w", pady=(10, 0))
+        ttk.Button(capture_group, text="Browse", command=self._browse_output_dir).grid(row=0, column=2)
+        ttk.Label(capture_group, text="Detection Mode").grid(row=1, column=0, sticky="w", pady=(10, 0))
         ttk.Combobox(
             capture_group,
             textvariable=self.mode_var,
             values=("slide", "detailed"),
             state="readonly",
         ).grid(row=1, column=1, sticky="ew", padx=(10, 8), pady=(10, 0))
-        ttk.Label(capture_group, text="간격").grid(row=1, column=2, sticky="w", pady=(10, 0))
+        ttk.Label(capture_group, text="Interval").grid(row=1, column=2, sticky="w", pady=(10, 0))
         ttk.Entry(capture_group, textvariable=self.interval_var, width=8).grid(row=1, column=3, sticky="ew", padx=(8, 0), pady=(10, 0))
-        ttk.Checkbutton(capture_group, text="종료 시 PDF 생성", variable=self.make_pdf_var).grid(
+        ttk.Checkbutton(capture_group, text="Create PDF on Finish", variable=self.make_pdf_var).grid(
             row=2, column=0, columnspan=2, sticky="w", pady=(10, 0)
         )
-        ttk.Checkbutton(capture_group, text="중복 슬라이드도 유지", variable=self.keep_duplicates_var).grid(
+        ttk.Checkbutton(capture_group, text="Keep Duplicate Slides", variable=self.keep_duplicates_var).grid(
             row=2, column=2, columnspan=2, sticky="w", pady=(10, 0)
         )
-        ttk.Checkbutton(capture_group, text="커서가 ROI 안에 있으면 일시정지", variable=self.pause_on_cursor_var).grid(
+        ttk.Checkbutton(capture_group, text="Pause when cursor is inside ROI", variable=self.pause_on_cursor_var).grid(
             row=3, column=0, columnspan=4, sticky="w", pady=(6, 0)
         )
 
-        ttk.Label(preview_frame, text="실시간 상태", style="Subheader.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 8))
+        ttk.Label(preview_frame, text="Live Status", style="Subheader.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 8))
 
         metrics_frame = ttk.Frame(preview_frame, style="Root.TFrame")
         metrics_frame.grid(row=1, column=0, sticky="ew")
@@ -1401,10 +1397,10 @@ class CaptureApp:
                 font=ui_font("text", 11),
             ).pack(anchor="w")
 
-        metric_card(metrics_frame, 0, "상태", self.session_status_var, "준비되었습니다.", self.palette["info"])
-        metric_card(metrics_frame, 1, "저장된 슬라이드", self.saved_count_var, "이번 세션", self.palette["success"])
-        metric_card(metrics_frame, 2, "중복으로 건너뜀", self.duplicate_count_var, "이번 세션", self.palette["accent_dark"])
-        metric_card(metrics_frame, 3, "경과 시간", self.elapsed_var, "mm:ss", self.palette["text"])
+        metric_card(metrics_frame, 0, "Status", self.session_status_var, "Ready.", self.palette["info"])
+        metric_card(metrics_frame, 1, "Saved Slides", self.saved_count_var, "This session", self.palette["success"])
+        metric_card(metrics_frame, 2, "Duplicates Skipped", self.duplicate_count_var, "This session", self.palette["accent_dark"])
+        metric_card(metrics_frame, 3, "Elapsed Time", self.elapsed_var, "mm:ss", self.palette["text"])
 
         preview_grid = ttk.Frame(preview_frame, style="Root.TFrame")
         preview_grid.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
@@ -1414,7 +1410,7 @@ class CaptureApp:
 
         selection_group = make_card(
             preview_grid,
-            "선택 영역 미리보기",
+            "Selected Region Preview",
             padding=(14, 10, 14, 14),
             row=0,
             column=0,
@@ -1423,7 +1419,7 @@ class CaptureApp:
         )
         selection_group.columnconfigure(0, weight=1)
         selection_group.rowconfigure(0, weight=1)
-        self.selection_image_label = ttk.Label(selection_group, text="아직 미리보기가 없습니다.", anchor="center")
+        self.selection_image_label = ttk.Label(selection_group, text="No preview yet.", anchor="center")
         self.selection_image_label.grid(row=0, column=0, sticky="nsew")
 
         saved_group = make_card(
@@ -1437,7 +1433,7 @@ class CaptureApp:
         )
         saved_group.columnconfigure(0, weight=1)
         saved_group.rowconfigure(0, weight=1)
-        self.saved_image_label = ttk.Label(saved_group, text="캡처가 시작되면 최근 저장된 슬라이드를 여기에 보여줍니다.", anchor="center")
+        self.saved_image_label = ttk.Label(saved_group, text="The latest saved slide will appear here after capture starts.", anchor="center")
         self.saved_image_label.grid(row=0, column=0, sticky="nsew")
 
         saved_strip_group = make_card(
@@ -1487,11 +1483,11 @@ class CaptureApp:
         footer.grid(row=2, column=0, sticky="ew")
         footer.columnconfigure(1, weight=1)
         ttk.Separator(footer, orient="horizontal").grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 12))
-        self.open_folder_button = ttk.Button(footer, text="세션 폴더 열기", command=self._open_session_folder)
+        self.open_folder_button = ttk.Button(footer, text="Open Session Folder", command=self._open_session_folder)
         self.open_folder_button.grid(row=1, column=0, sticky="w")
         ttk.Label(
             footer,
-            text="영역을 먼저 선택한 뒤 캡처를 시작하세요. 진행 중에는 일시정지와 종료만 사용할 수 있습니다.",
+            text="Select a region before starting capture. While running, only pause and finish are available.",
             style="Subheader.TLabel",
         ).grid(row=1, column=1, sticky="w", padx=(14, 14))
 
@@ -1508,7 +1504,7 @@ class CaptureApp:
         self.pause_button.pack(side="left", padx=(8, 0))
         self.finish_button = ttk.Button(action_row, text="Finish", style="Danger.TButton", command=self._finish_capture, state="disabled")
         self.finish_button.pack(side="left", padx=(8, 0))
-        self.view_slides_button = ttk.Button(action_row, text="캡처본 전체 보기", command=self._open_slides_gallery)
+        self.view_slides_button = ttk.Button(action_row, text="View All Captures", command=self._open_slides_gallery)
         self.view_slides_button.pack(side="left", padx=(8, 0))
 
     def _on_scroll_content_configure(self, _event: tk.Event) -> None:
@@ -1560,21 +1556,21 @@ class CaptureApp:
             return
         if self.engine.stopper.paused:
             self.engine.stopper.resume()
-            self.pause_button_text.set("일시정지")
-            self.session_status_var.set("캡처 중")
-            self._append_log("[gui] 캡처를 재개했습니다.")
+            self.pause_button_text.set("Pause")
+            self.session_status_var.set("Capturing")
+            self._append_log("[gui] Capture resumed.")
         else:
             self.engine.stopper.pause()
-            self.pause_button_text.set("재개")
-            self.session_status_var.set("일시정지됨")
-            self._append_log("[gui] 캡처를 일시정지했습니다.")
+            self.pause_button_text.set("Resume")
+            self.session_status_var.set("Paused")
+            self._append_log("[gui] Capture paused.")
 
     def _finish_capture(self) -> None:
         if self.engine is None:
             return
         self.engine.stopper.request_stop()
-        self.session_status_var.set("종료 요청 중")
-        self._append_log("[gui] 종료 요청을 보냈습니다.")
+        self.session_status_var.set("Stopping")
+        self._append_log("[gui] Finish requested.")
         self.pause_button.configure(state="disabled")
         self.finish_button.configure(state="disabled")
 
@@ -1624,12 +1620,12 @@ class CaptureApp:
             child.destroy()
         self.gallery_thumb_refs = []
 
-        self.gallery_header_var.set(f"세션 폴더: {output_root}\n저장된 슬라이드: {len(paths)}장")
+        self.gallery_header_var.set(f"Session folder: {output_root}\nSaved slides: {len(paths)}")
 
         if not paths:
             ttk.Label(
                 self.gallery_inner,
-                text="아직 저장된 슬라이드가 없습니다.\n캡처를 시작하거나 잠시 기다려 주세요.",
+                text="No saved slides yet.\nStart capture or wait for slide changes.",
                 justify="center",
             ).grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
             self._refresh_gallery_canvas()
@@ -1655,7 +1651,7 @@ class CaptureApp:
                 image_label.grid(row=0, column=0, sticky="nsew")
                 image_label.bind("<Button-1>", lambda _event, p=path: self._open_image_path(p))
             except Exception:
-                ttk.Label(card, text="미리보기를 불러오지 못했습니다.", anchor="center").grid(
+                ttk.Label(card, text="Could not load preview.", anchor="center").grid(
                     row=0, column=0, sticky="nsew", pady=(20, 20)
                 )
 
@@ -1665,7 +1661,7 @@ class CaptureApp:
                 justify="left",
                 wraplength=260,
             ).grid(row=1, column=0, sticky="w", pady=(8, 0))
-            ttk.Button(card, text="파일 열기", command=lambda p=path: self._open_image_path(p)).grid(
+            ttk.Button(card, text="Open File", command=lambda p=path: self._open_image_path(p)).grid(
                 row=2, column=0, sticky="w", pady=(8, 0)
             )
 
@@ -1679,7 +1675,7 @@ class CaptureApp:
             return
 
         self.gallery_window = tk.Toplevel(self.root)
-        self.gallery_window.title("캡처본 전체 보기")
+        self.gallery_window.title("All Captures")
         self.gallery_window.geometry("980x760")
         self.gallery_window.minsize(760, 560)
         self.gallery_window.transient(self.root)
@@ -1693,12 +1689,12 @@ class CaptureApp:
         header = ttk.Frame(outer, style="Root.TFrame")
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
-        ttk.Label(header, text="현재 캡처된 슬라이드", style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(header, text="Captured Slides", style="Header.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(header, textvariable=self.gallery_header_var, justify="left").grid(row=1, column=0, sticky="w", pady=(6, 0))
         header_buttons = ttk.Frame(header, style="Root.TFrame")
         header_buttons.grid(row=0, column=1, rowspan=2, sticky="e")
-        ttk.Button(header_buttons, text="새로고침", command=lambda: self._refresh_slides_gallery(force=True)).pack(side="left")
-        ttk.Button(header_buttons, text="세션 폴더 열기", command=self._open_session_folder).pack(side="left", padx=(8, 0))
+        ttk.Button(header_buttons, text="Refresh", command=lambda: self._refresh_slides_gallery(force=True)).pack(side="left")
+        ttk.Button(header_buttons, text="Open Session Folder", command=self._open_session_folder).pack(side="left", padx=(8, 0))
 
         body = ttk.Frame(outer, style="Root.TFrame")
         body.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
@@ -1737,7 +1733,7 @@ class CaptureApp:
         if not paths:
             ttk.Label(
                 self.saved_strip_frame,
-                text="아직 저장된 슬라이드가 없습니다.",
+                text="No saved slides yet.",
                 style="PanelSubheader.TLabel",
             ).grid(row=0, column=0, sticky="w")
             return
@@ -1762,7 +1758,7 @@ class CaptureApp:
                 image_label.grid(row=0, column=0, sticky="nsew", padx=6, pady=(6, 0))
                 image_label.bind("<Button-1>", lambda _event, p=path: self._open_image_path(p))
             except Exception:
-                ttk.Label(cell, text="미리보기 없음", anchor="center").grid(row=0, column=0, padx=6, pady=(16, 12))
+                ttk.Label(cell, text="No preview", anchor="center").grid(row=0, column=0, padx=6, pady=(16, 12))
             ttk.Label(
                 cell,
                 text=path.name[:18] + ("..." if len(path.name) > 18 else ""),
@@ -1772,11 +1768,11 @@ class CaptureApp:
 
     def _log_tag_for_line(self, line: str) -> str:
         lowered = line.lower()
-        if "[saved]" in lowered or "저장" in line:
+        if "[saved]" in lowered or "saved" in lowered:
             return "saved"
         if "[wait]" in lowered or "[window-guard]" in lowered:
             return "wait"
-        if "error" in lowered or "오류" in line or "traceback" in lowered:
+        if "error" in lowered or "traceback" in lowered:
             return "error"
         return ""
 
@@ -1814,7 +1810,7 @@ class CaptureApp:
 
     def _browse_output_dir(self) -> None:
         chosen = filedialog.askdirectory(
-            title="저장 기본 경로 선택",
+            title="Choose Base Output Folder",
             initialdir=str(normalize_output_base(self.output_base_var.get())),
             parent=self.root,
         )
@@ -1854,13 +1850,13 @@ class CaptureApp:
                 selectcolor=active_bg if screen_active else idle_bg,
                 font=ui_font("text", 12, "bold") if screen_active else ui_font("text", 12),
             )
-        self.pick_region_button.configure(text="슬라이드 영역 선택" if is_window_mode else "화면 영역 선택")
+        self.pick_region_button.configure(text="Select Slide Region" if is_window_mode else "Select Screen Region")
         self._update_selection_summary()
         self._refresh_selection_preview_from_state()
 
     def _format_window_item(self, item: Dict[str, Any], index: int) -> str:
-        title = item.get("window_title") or "(제목 없음)"
-        owner = item.get("window_owner") or "(앱 이름 없음)"
+        title = item.get("window_title") or "(Untitled)"
+        owner = item.get("window_owner") or "(Unknown App)"
         return (
             f"{index:02d}. id={item['window_id']}  {owner}  "
             f"{item['width']}x{item['height']}  {title}"
@@ -1872,7 +1868,7 @@ class CaptureApp:
         if not self.window_mode_supported:
             self.window_candidates = []
             self.window_listbox.delete(0, "end")
-            self.selection_summary_var.set("이 플랫폼에서는 창 고정 캡처를 사용할 수 없습니다. 화면 영역 직접 캡처를 사용하세요.")
+            self.selection_summary_var.set("Window capture is not available on this platform. Use screen-region capture instead.")
             return
         try:
             owner_filter = self.window_owner_var.get().strip() or None
@@ -1881,7 +1877,7 @@ class CaptureApp:
             if not candidates and owner_filter == "Google Chrome":
                 candidates = self.sc.list_candidate_windows("Chrome", title_filter)
         except Exception as exc:
-            messagebox.showerror("창 목록 조회 실패", str(exc), parent=self.root)
+            messagebox.showerror("Window List Failed", str(exc), parent=self.root)
             return
 
         self.window_candidates = candidates
@@ -1896,8 +1892,8 @@ class CaptureApp:
             self._on_window_selected()
         else:
             self.window_selection = None
-            self.selection_summary_var.set("조건에 맞는 창을 찾지 못했습니다. Chrome 창을 앞으로 띄운 뒤 다시 시도해 주세요.")
-            self.selection_image_label.configure(image="", text="표시할 창이 없습니다.")
+            self.selection_summary_var.set("No matching window found. Bring the Chrome lecture window forward and try again.")
+            self.selection_image_label.configure(image="", text="No window to display.")
             self.preview_photo = None
 
     def _on_window_selected(self, _event: Optional[tk.Event] = None) -> None:
@@ -1924,34 +1920,34 @@ class CaptureApp:
         if self.source_mode_var.get() == "window":
             window = self._current_window_candidate()
             if window is None:
-                self.selection_summary_var.set("캡처할 Chrome 창을 선택해 주세요.")
+                self.selection_summary_var.set("Select the Chrome window to capture.")
                 return
-            title = window.get("window_title") or "(제목 없음)"
+            title = window.get("window_title") or "(Untitled)"
             summary = (
-                f"대상 창: {window.get('window_owner', '')} / {title}\n"
-                f"창 ID: {window['window_id']}  크기: {window['width']} x {window['height']}"
+                f"Target window: {window.get('window_owner', '')} / {title}\n"
+                f"Window ID: {window['window_id']}  Size: {window['width']} x {window['height']}"
             )
             if self.window_selection and self.window_selection.window.get("window_id") == window.get("window_id"):
                 x, y, w, h = self.window_selection.roi
-                summary += f"\n선택한 슬라이드 영역: left={x}, top={y}, width={w}, height={h}"
+                summary += f"\nSelected slide region: left={x}, top={y}, width={w}, height={h}"
             else:
-                summary += "\n아직 슬라이드 영역을 선택하지 않았습니다."
+                summary += "\nNo slide region has been selected yet."
             self.selection_summary_var.set(summary)
             return
 
         if self.screen_selection:
             region = self.screen_selection.region
             self.selection_summary_var.set(
-                "화면 전체에서 ROI를 직접 지정합니다.\n"
-                f"선택한 영역: left={region['left']}, top={region['top']}, "
+                "Select the ROI directly from the full screen.\n"
+                f"Selected region: left={region['left']}, top={region['top']}, "
                 f"width={region['width']}, height={region['height']}"
             )
         else:
-            self.selection_summary_var.set("화면 캡처 모드입니다. 캡처할 영역을 먼저 선택해 주세요.")
+            self.selection_summary_var.set("Screen capture mode. Select the capture region first.")
 
     def _choose_region(self) -> None:
         if self.capture_thread and self.capture_thread.is_alive():
-            messagebox.showinfo("캡처 진행 중", "캡처가 진행 중일 때는 영역을 다시 고를 수 없습니다.", parent=self.root)
+            messagebox.showinfo("Capture Running", "You cannot choose a new region while capture is running.", parent=self.root)
             return
 
         self.root.configure(cursor="watch")
@@ -1959,11 +1955,11 @@ class CaptureApp:
         try:
             if self.source_mode_var.get() == "window":
                 if not self.window_mode_supported:
-                    messagebox.showinfo("창 캡처", "이 플랫폼에서는 창 고정 캡처를 사용할 수 없습니다.", parent=self.root)
+                    messagebox.showinfo("Window Capture", "Window capture is not available on this platform.", parent=self.root)
                     return
                 candidate = self._current_window_candidate()
                 if candidate is None:
-                    messagebox.showinfo("대상 창 선택", "먼저 캡처할 창을 선택해 주세요.", parent=self.root)
+                    messagebox.showinfo("Select Target Window", "Select a window to capture first.", parent=self.root)
                     return
                 source = self.sc.create_window_source(
                     window_id=int(candidate["window_id"]),
@@ -1979,8 +1975,8 @@ class CaptureApp:
                 dialog = RoiSelectorDialog(
                     self.root,
                     preview,
-                    "창 내부 슬라이드 영역 선택",
-                    "선택한 창 스냅샷에서 슬라이드 영역만 드래그해 선택하세요.",
+                    "Select Slide Region Inside Window",
+                    "Drag over the slide area in the selected window snapshot.",
                 )
                 roi = dialog.show()
                 if roi is None:
@@ -1997,8 +1993,8 @@ class CaptureApp:
                 dialog = RoiSelectorDialog(
                     self.root,
                     preview,
-                    "화면 영역 선택",
-                    "강의 슬라이드가 보이는 화면 영역만 드래그해 선택하세요.",
+                    "Select Screen Region",
+                    "Drag over the screen area where the lecture slide is visible.",
                 )
                 roi = dialog.show()
                 if roi is None:
@@ -2014,7 +2010,7 @@ class CaptureApp:
                 self._display_selection_preview(preview, roi)
         except Exception as exc:
             traceback.print_exc()
-            messagebox.showerror("영역 선택 실패", str(exc), parent=self.root)
+            messagebox.showerror("Region Selection Failed", str(exc), parent=self.root)
         finally:
             self.root.configure(cursor="")
             self._update_selection_summary()
@@ -2043,13 +2039,13 @@ class CaptureApp:
             ):
                 self._display_selection_preview(self.window_selection.preview_bgr, self.window_selection.roi)
                 return
-            self._clear_selection_preview("선택한 창의 슬라이드 영역을 아직 지정하지 않았습니다.")
+            self._clear_selection_preview("No slide region has been selected for the chosen window yet.")
             return
 
         if self.screen_selection is not None:
             self._display_selection_preview(self.screen_selection.preview_bgr, self.screen_selection.roi)
             return
-        self._clear_selection_preview("화면 영역을 아직 지정하지 않았습니다.")
+        self._clear_selection_preview("No screen region has been selected yet.")
 
     def _display_last_saved_preview(self, path: Path) -> None:
         try:
@@ -2065,9 +2061,9 @@ class CaptureApp:
         try:
             value = float(self.interval_var.get().strip())
         except ValueError as exc:
-            raise RuntimeError("샘플링 간격은 숫자로 입력해 주세요.") from exc
+            raise RuntimeError("Enter a numeric sampling interval.") from exc
         if value < 0.10:
-            raise RuntimeError("샘플링 간격은 0.10초 이상이어야 합니다.")
+            raise RuntimeError("The sampling interval must be at least 0.10 seconds.")
         return value
 
     def _build_output_dir(self) -> Path:
@@ -2087,12 +2083,12 @@ class CaptureApp:
     def _create_capture_source(self, output_dir: Path) -> Any:
         if self.source_mode_var.get() == "window":
             if not self.window_mode_supported:
-                raise RuntimeError("이 플랫폼에서는 창 고정 캡처를 사용할 수 없습니다. 화면 영역 직접 캡처를 사용하세요.")
+                raise RuntimeError("Window capture is not available on this platform. Use screen-region capture instead.")
             candidate = self._current_window_candidate()
             if candidate is None:
-                raise RuntimeError("캡처할 창을 선택해 주세요.")
+                raise RuntimeError("Select a window to capture.")
             if self.window_selection is None or self.window_selection.window.get("window_id") != candidate.get("window_id"):
-                raise RuntimeError("선택한 창에 대해 슬라이드 영역을 먼저 지정해 주세요.")
+                raise RuntimeError("Select a slide region for the chosen window first.")
             source = self.sc.create_window_source(
                 window_id=int(candidate["window_id"]),
                 window_owner=str(candidate["window_owner"]),
@@ -2105,7 +2101,7 @@ class CaptureApp:
             source.set_roi_from_pixels(x, y, w, h, source_w, source_h)
         else:
             if self.screen_selection is None:
-                raise RuntimeError("캡처할 화면 영역을 먼저 선택해 주세요.")
+                raise RuntimeError("Select a screen region to capture first.")
             source = self.sc.ScreenRegionSource(
                 self.screen_selection.region,
                 pause_on_cursor_in_roi=self.pause_on_cursor_var.get(),
@@ -2123,7 +2119,7 @@ class CaptureApp:
             output_dir = self._build_output_dir()
             capture_source = self._create_capture_source(output_dir)
         except Exception as exc:
-            messagebox.showerror("캡처 시작 실패", str(exc), parent=self.root)
+            messagebox.showerror("Capture Start Failed", str(exc), parent=self.root)
             return
 
         config = self.sc.Config(sample_interval=interval)
@@ -2148,11 +2144,11 @@ class CaptureApp:
         self.session_dir_var.set(str(output_dir))
         self.last_saved_var.set("-")
         self.elapsed_var.set("00:00")
-        self.saved_image_label.configure(image="", text="캡처가 시작되면 최근 저장된 슬라이드를 여기에 보여줍니다.")
+        self.saved_image_label.configure(image="", text="The latest saved slide will appear here after capture starts.")
         self.last_saved_photo = None
-        self.session_status_var.set("캡처 중")
-        self._append_log(f"[gui] 세션 시작: {output_dir}")
-        self.pause_button_text.set("일시정지")
+        self.session_status_var.set("Capturing")
+        self._append_log(f"[gui] Session started: {output_dir}")
+        self.pause_button_text.set("Pause")
         self.gallery_snapshot = None
         self.saved_strip_snapshot = None
         self._refresh_saved_strip(force=True)
@@ -2186,27 +2182,27 @@ class CaptureApp:
         self.start_button.configure(state="normal")
         self.pause_button.configure(state="disabled")
         self.finish_button.configure(state="disabled")
-        self.pause_button_text.set("일시정지")
+        self.pause_button_text.set("Pause")
         self.pick_region_button.configure(state="normal")
         self.refresh_button.configure(state="normal" if self.source_mode_var.get() == "window" else "disabled")
 
         if self.run_error:
-            self.session_status_var.set("오류로 종료")
+            self.session_status_var.set("Ended with Error")
             if not self.close_requested:
                 show_long_message(
                     self.root,
-                    "캡처 오류",
-                    "캡처 도중 오류가 발생했습니다. 아래 로그를 확인해 주세요.",
+                    "Capture Error",
+                    "An error occurred during capture. Check the log below.",
                     self.run_error,
                 )
         else:
-            self.session_status_var.set("완료")
+            self.session_status_var.set("Complete")
             saved = self.engine.capture_count if self.engine is not None else 0
             duplicates = self.engine.duplicate_skip_count if self.engine is not None else 0
             if not self.close_requested:
                 messagebox.showinfo(
-                    "캡처 완료",
-                    f"저장된 슬라이드: {saved}장\n중복으로 건너뛴 슬라이드: {duplicates}장",
+                    "Capture Complete",
+                    f"Saved slides: {saved}\nDuplicate slides skipped: {duplicates}",
                     parent=self.root,
                 )
 
@@ -2245,8 +2241,8 @@ class CaptureApp:
     def _on_close(self) -> None:
         if self.capture_thread and self.capture_thread.is_alive():
             should_stop = messagebox.askyesno(
-                "캡처 종료",
-                "캡처가 진행 중입니다. 종료 요청을 보낸 뒤 창을 닫을까요?\n현재까지 저장된 슬라이드로 PDF 생성까지 진행됩니다.",
+                "Finish Capture",
+                "Capture is still running. Send a finish request and close the window?\nA PDF will be generated from the slides saved so far.",
                 parent=self.root,
             )
             if not should_stop:
@@ -2292,7 +2288,7 @@ def main() -> None:
     maybe_reexec_with_usable_python()
     print(f"[gui-start] executable={sys.executable}")
     root = tk.Tk()
-    show_bootstrap_screen(root, "앱을 준비하고 있습니다.\n필수 모듈과 캡처 엔진을 확인하는 중입니다.")
+    show_bootstrap_screen(root, "Preparing the app.\nChecking required modules and the capture engine.")
     missing = discover_missing_modules()
     if missing:
         missing_text = ", ".join(missing)
@@ -2320,8 +2316,8 @@ def main() -> None:
         print(details)
         show_error_screen(
             root,
-            "초기화 실패",
-            "캡처 모듈을 불러오지 못했습니다. 아래 내용을 확인해 주세요.",
+            "Initialization Failed",
+            "Could not load the capture module. Check the details below.",
             details,
         )
         root.mainloop()

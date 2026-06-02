@@ -12,7 +12,7 @@ SCRIPT_PATH="$RES_DIR/slide_capture.py"
 REQ_PATH="$RES_DIR/requirements.txt"
 CONFIG_DIR="$HOME/Library/Application Support/LectureSlideCapture"
 OUTPUT_BASE_FILE="$CONFIG_DIR/output_base.txt"
-DEFAULT_OUTPUT_BASE="$HOME/Desktop/lecture_captures"
+DEFAULT_OUTPUT_BASE="$HOME/Documents/Lecture Slide Capture"
 PYTHON_BIN="${PYTHON_BIN:-$(command -v python3 || true)}"
 
 normalize_path() {
@@ -45,7 +45,7 @@ OUTPUT_DIR="$OUTPUT_BASE/$TIMESTAMP"
 pause_and_exit() {
   local status="${1:-0}"
   echo
-  read -r -p "엔터를 누르면 이 창을 닫습니다..." _ || true
+  read -r -p "Press Enter to close this window..." _ || true
   exit "$status"
 }
 
@@ -53,22 +53,22 @@ print_header() {
   echo "=============================================="
   echo " Lecture Slide Capture"
   echo "=============================================="
-  echo "모드: $MODE"
-  echo "저장 기본 경로: $OUTPUT_BASE"
-  echo "이번 세션 폴더: $OUTPUT_DIR"
+  echo "Mode: $MODE"
+  echo "Base output folder: $OUTPUT_BASE"
+  echo "Current session folder: $OUTPUT_DIR"
   if [[ -n "$WINDOW_ID" ]]; then
-    echo "대상 창 ID: $WINDOW_ID"
+    echo "Target window ID: $WINDOW_ID"
   elif [[ "$MODE" == "capture" ]]; then
-    echo "대상 창: 지금 목록에서 선택"
+    echo "Target window: choose from the current list"
   else
-    echo "대상 창 ID: 자동 선택"
+    echo "Target window ID: auto-select"
   fi
   echo
 }
 
 if [[ -z "$PYTHON_BIN" ]]; then
-  echo "[오류] python3 를 찾지 못했습니다."
-  echo "Python 3 설치 후 다시 실행하세요."
+  echo "[error] Could not find python3."
+  echo "Install Python 3 and run again."
   pause_and_exit 1
 fi
 
@@ -81,19 +81,19 @@ PY
 )"
 
 if [[ -n "$missing_modules" ]]; then
-  echo "[안내] 필요한 Python 패키지가 일부 없습니다: $missing_modules"
-  read -r -p "지금 자동으로 설치할까요? [Y/n] " INSTALL_REPLY || INSTALL_REPLY="Y"
+  echo "[info] Some required Python packages are missing: $missing_modules"
+  read -r -p "Install them now? [Y/n] " INSTALL_REPLY || INSTALL_REPLY="Y"
   INSTALL_REPLY="${INSTALL_REPLY:-Y}"
   case "$INSTALL_REPLY" in
     [Nn]*)
       echo
-      echo "다음 명령으로 설치한 뒤 다시 실행하세요:"
+      echo "Install with this command, then run again:"
       echo "  python3 -m pip install --user -r \"$REQ_PATH\""
       pause_and_exit 1
       ;;
     *)
       echo
-      echo "패키지를 설치합니다..."
+      echo "Installing packages..."
       "$PYTHON_BIN" -m pip install --user -r "$REQ_PATH"
       ;;
   esac
@@ -122,7 +122,7 @@ else
   cmd+=(--choose-window)
 fi
 
-printf '[실행] '
+printf '[run] '
 printf '%q ' "${cmd[@]}"
 printf '\n\n'
 
@@ -134,12 +134,12 @@ set -e
 echo
 if [[ "$STATUS" -eq 0 ]]; then
   if [[ "$MODE" == "capture" ]]; then
-    echo "[완료] 저장 위치: $OUTPUT_DIR"
+    echo "[done] Output: $OUTPUT_DIR"
   else
-    echo "[완료] 창 목록 표시를 마쳤습니다."
+    echo "[done] Finished listing windows."
   fi
 else
-  echo "[종료] 프로그램이 상태 코드 $STATUS 로 끝났습니다."
+  echo "[exit] Program ended with status code $STATUS."
 fi
 
 pause_and_exit "$STATUS"

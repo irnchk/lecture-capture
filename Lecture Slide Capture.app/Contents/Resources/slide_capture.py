@@ -340,7 +340,7 @@ class ScreenRegionSource(CaptureSource):
             self.capture_region,
             margin=self.cursor_pause_margin_pixels,
         ):
-            raise CaptureUnavailableError("커서가 ROI 안에 있어 캡처를 잠시 멈춥니다.")
+            raise CaptureUnavailableError("The cursor is inside the ROI, so capture is paused briefly.")
 
         shot = self._sct.grab(self.capture_region)
         img = np.array(shot)
@@ -385,7 +385,7 @@ class MacWindowSource(CaptureSource):
     ) -> None:
         if Quartz is None or AppKit is None:
             raise RuntimeError(
-                "macOS 창 캡처에는 pyobjc-framework-Quartz 와 pyobjc-framework-Cocoa 가 필요합니다."
+                "macOS window capture requires pyobjc-framework-Quartz and pyobjc-framework-Cocoa."
             )
 
         self.window_id = int(window_id)
@@ -418,7 +418,7 @@ class MacWindowSource(CaptureSource):
     def _resolve_backend(self, requested: str) -> str:
         requested = requested.lower()
         if requested not in {"auto", "screencapturekit", "coregraphics"}:
-            raise RuntimeError(f"지원하지 않는 창 캡처 백엔드입니다: {requested}")
+            raise RuntimeError(f"Unsupported window capture backend: {requested}")
 
         if requested in {"auto", "screencapturekit"} and self._screen_capture_kit_available():
             return "screencapturekit"
@@ -426,8 +426,8 @@ class MacWindowSource(CaptureSource):
             return "coregraphics"
 
         raise RuntimeError(
-            "사용 가능한 macOS 창 캡처 백엔드를 찾지 못했습니다. "
-            "ScreenCaptureKit 또는 Quartz(PyObjC) 설치 상태를 확인하세요."
+            "Could not find an available macOS window capture backend. "
+            "Check whether ScreenCaptureKit or Quartz (PyObjC) is installed."
         )
 
     @staticmethod
@@ -452,9 +452,9 @@ class MacWindowSource(CaptureSource):
         source_height: int,
     ) -> None:
         if width <= 0 or height <= 0:
-            raise RuntimeError("선택한 ROI 가 비어 있습니다.")
+            raise RuntimeError("The selected ROI is empty.")
         if source_width <= 0 or source_height <= 0:
-            raise RuntimeError("창 미리보기 크기가 올바르지 않습니다.")
+            raise RuntimeError("The window preview size is invalid.")
 
         self.selection_roi_px = {
             "left": int(left),
@@ -484,7 +484,7 @@ class MacWindowSource(CaptureSource):
 
     def descriptor(self) -> SourceDescriptor:
         if self.selection_roi_px is None:
-            raise RuntimeError("창 내부 ROI 가 아직 설정되지 않았습니다.")
+            raise RuntimeError("The window ROI has not been set yet.")
 
         return SourceDescriptor(
             source_type="mac-window",
@@ -501,7 +501,7 @@ class MacWindowSource(CaptureSource):
 
     def to_json(self) -> Dict[str, Any]:
         if self.selection_roi_px is None or self.selection_source_size is None or self.norm_roi is None:
-            raise RuntimeError("창 내부 ROI 가 아직 설정되지 않았습니다.")
+            raise RuntimeError("The window ROI has not been set yet.")
 
         return {
             "source_type": "mac-window",
@@ -554,7 +554,7 @@ class MacWindowSource(CaptureSource):
 
     def _capture_full_window(self, require_stable: bool = True) -> np.ndarray:
         if require_stable and self._cursor_inside_roi():
-            raise CaptureUnavailableError("커서가 ROI 안에 있어 캡처를 잠시 멈춥니다.")
+            raise CaptureUnavailableError("The cursor is inside the ROI, so capture is paused briefly.")
 
         if self.backend == "screencapturekit":
             first_error: Optional[Exception] = None
@@ -568,13 +568,13 @@ class MacWindowSource(CaptureSource):
             else:
                 if not require_stable and Quartz is not None:
                     if not self._logged_backend_fallback:
-                        print(f"[window] ScreenCaptureKit 미리보기 실패, CoreGraphics 로 일시 폴백합니다: {first_error}")
+                        print(f"[window] ScreenCaptureKit preview failed; temporarily falling back to CoreGraphics: {first_error}")
                         self._logged_backend_fallback = True
                     full_window = self._capture_with_coregraphics()
                 elif first_error is not None:
                     raise first_error
                 else:
-                    raise CaptureUnavailableError("ScreenCaptureKit 창 캡처에 실패했습니다.")
+                    raise CaptureUnavailableError("ScreenCaptureKit window capture failed.")
         else:
             full_window = self._capture_with_coregraphics()
 
@@ -759,20 +759,20 @@ class MacWindowSource(CaptureSource):
             if self._unstable_since is None:
                 self._unstable_since = now
             if now - self._last_guard_log_monotonic >= 2.0:
-                print(f"[window-guard] 전환 감지로 프레임을 건너뜁니다: {', '.join(reasons)}")
+                print(f"[window-guard] Skipping frame because a transition was detected: {', '.join(reasons)}")
                 self._last_guard_log_monotonic = now
-            raise CaptureUnavailableError("Mission Control/데스크탑 전환/창 이동 중이라 프레임을 잠시 건너뜁니다.")
+            raise CaptureUnavailableError("Skipping frame during Mission Control, desktop switching, or window movement.")
 
         if self._unstable_since is not None:
             if now - self._unstable_since < self.unstable_settle_seconds:
-                raise CaptureUnavailableError("창 전환 직후 안정화 중입니다.")
+                raise CaptureUnavailableError("Stabilizing right after a window transition.")
             self._unstable_since = None
 
         self._last_valid_frame_health = frame_health
 
     def _capture_with_coregraphics(self) -> np.ndarray:
         if Quartz is None:
-            raise CaptureUnavailableError("Quartz 가 없어 CoreGraphics 창 캡처를 사용할 수 없습니다.")
+            raise CaptureUnavailableError("Quartz is unavailable, so CoreGraphics window capture cannot be used.")
 
         image_options = Quartz.kCGWindowImageBoundsIgnoreFraming | Quartz.kCGWindowImageBestResolution
         image = Quartz.CGWindowListCreateImage(
@@ -783,18 +783,18 @@ class MacWindowSource(CaptureSource):
         )
         if image is None:
             raise CaptureUnavailableError(
-                "CoreGraphics 로 Chrome 창을 가져오지 못했습니다. 창이 닫혔거나 화면 기록 권한이 없을 수 있습니다."
+                "CoreGraphics could not capture the Chrome window. The window may be closed, or Screen Recording permission may be missing."
             )
         return cgimage_to_bgr(image)
 
     def _capture_with_screencapturekit(self) -> np.ndarray:
         if not self._screen_capture_kit_available():
-            raise CaptureUnavailableError("ScreenCaptureKit 스크린샷 API 를 사용할 수 없습니다.")
+            raise CaptureUnavailableError("ScreenCaptureKit screenshot API is unavailable.")
 
         sc_window = self._get_sc_window()
         if sc_window is None:
             raise CaptureUnavailableError(
-                "ScreenCaptureKit 에서 지정한 창을 찾지 못했습니다. 창이 닫혔거나 화면 기록 권한이 없을 수 있습니다."
+                "ScreenCaptureKit could not find the selected window. The window may be closed, or Screen Recording permission may be missing."
             )
 
         content_filter = ScreenCaptureKit.SCContentFilter.alloc().initWithDesktopIndependentWindow_(sc_window)
@@ -810,7 +810,7 @@ class MacWindowSource(CaptureSource):
                 point_pixel_scale = float(get_objc_property(content_filter, "pointPixelScale"))
             except Exception as fallback_exc:
                 raise CaptureUnavailableError(
-                    "ScreenCaptureKit 의 창 크기 정보를 해석하지 못했습니다. "
+                    "Could not interpret ScreenCaptureKit window size information. "
                     f"contentRect={content_rect!r} error={exc}; frame fallback error={fallback_exc}"
                 ) from fallback_exc
 
@@ -842,11 +842,11 @@ class MacWindowSource(CaptureSource):
         image = result.get("image")
         if error is not None:
             self._sc_window = None
-            raise CaptureUnavailableError(f"ScreenCaptureKit 창 캡처 오류: {error}")
+            raise CaptureUnavailableError(f"ScreenCaptureKit window capture error: {error}")
         if image is None:
             self._sc_window = None
             raise CaptureUnavailableError(
-                "ScreenCaptureKit 이 빈 이미지를 반환했습니다. 창이 최소화되었거나 캡처 권한이 없을 수 있습니다."
+                "ScreenCaptureKit returned an empty image. The window may be minimized, or capture permission may be missing."
             )
         return cgimage_to_bgr(image)
 
@@ -869,7 +869,7 @@ class MacWindowSource(CaptureSource):
 
     def _crop_full_window(self, full_window: np.ndarray) -> np.ndarray:
         if self.norm_roi is None:
-            raise RuntimeError("창 내부 ROI 가 아직 설정되지 않았습니다.")
+            raise RuntimeError("The window ROI has not been set yet.")
 
         h, w = full_window.shape[:2]
         x_frac, y_frac, w_frac, h_frac = self.norm_roi
@@ -1053,11 +1053,11 @@ class WindowsWindowSource(CaptureSource):
         pause_on_cursor_in_roi: bool = True,
     ) -> None:
         if not IS_WINDOWS:
-            raise RuntimeError("Windows 창 캡처는 Windows에서만 사용할 수 있습니다.")
+            raise RuntimeError("Windows window capture can only be used on Windows.")
 
         requested = backend.lower()
         if requested not in {"auto", "win32-mss"}:
-            raise RuntimeError(f"Windows에서 지원하지 않는 창 캡처 백엔드입니다: {backend}")
+            raise RuntimeError(f"Unsupported Windows window capture backend: {backend}")
 
         enable_windows_dpi_awareness()
         self.window_id = int(window_id)
@@ -1081,9 +1081,9 @@ class WindowsWindowSource(CaptureSource):
         source_height: int,
     ) -> None:
         if width <= 0 or height <= 0:
-            raise RuntimeError("선택한 ROI 가 비어 있습니다.")
+            raise RuntimeError("The selected ROI is empty.")
         if source_width <= 0 or source_height <= 0:
-            raise RuntimeError("창 미리보기 크기가 올바르지 않습니다.")
+            raise RuntimeError("The window preview size is invalid.")
 
         self.selection_roi_px = {
             "left": int(left),
@@ -1108,7 +1108,7 @@ class WindowsWindowSource(CaptureSource):
 
     def descriptor(self) -> SourceDescriptor:
         if self.selection_roi_px is None:
-            raise RuntimeError("창 내부 ROI 가 아직 설정되지 않았습니다.")
+            raise RuntimeError("The window ROI has not been set yet.")
 
         return SourceDescriptor(
             source_type="windows-window",
@@ -1125,7 +1125,7 @@ class WindowsWindowSource(CaptureSource):
 
     def to_json(self) -> Dict[str, Any]:
         if self.selection_roi_px is None or self.selection_source_size is None or self.norm_roi is None:
-            raise RuntimeError("창 내부 ROI 가 아직 설정되지 않았습니다.")
+            raise RuntimeError("The window ROI has not been set yet.")
 
         return {
             "source_type": "windows-window",
@@ -1181,13 +1181,13 @@ class WindowsWindowSource(CaptureSource):
 
     def _capture_full_window(self, require_roi_cursor_guard: bool = True) -> np.ndarray:
         if require_roi_cursor_guard and self._cursor_inside_roi():
-            raise CaptureUnavailableError("커서가 ROI 안에 있어 캡처를 잠시 멈춥니다.")
+            raise CaptureUnavailableError("The cursor is inside the ROI, so capture is paused briefly.")
 
         snapshot = self._query_window_snapshot()
         if snapshot is None:
-            raise CaptureUnavailableError("지정한 Windows 창을 찾지 못했습니다.")
+            raise CaptureUnavailableError("Could not find the selected Windows window.")
         if not snapshot.is_onscreen or snapshot.width <= 0 or snapshot.height <= 0:
-            raise CaptureUnavailableError("지정한 Windows 창이 최소화되었거나 화면에 보이지 않습니다.")
+            raise CaptureUnavailableError("The selected Windows window is minimized or not visible.")
 
         region = {
             "left": snapshot.left,
@@ -1201,7 +1201,7 @@ class WindowsWindowSource(CaptureSource):
 
     def _crop_full_window(self, full_window: np.ndarray) -> np.ndarray:
         if self.norm_roi is None:
-            raise RuntimeError("창 내부 ROI 가 아직 설정되지 않았습니다.")
+            raise RuntimeError("The window ROI has not been set yet.")
 
         h, w = full_window.shape[:2]
         x_frac, y_frac, w_frac, h_frac = self.norm_roi
@@ -1410,7 +1410,7 @@ class SlideCaptureEngine:
                 ]
             )
         print(
-            "[duplicate] 기존 슬라이드와 동일해 저장하지 않았습니다: "
+            "[duplicate] Skipped because it matches an existing slide: "
             f"keep={duplicate.record.path.name} ssim={duplicate.metrics.ssim:.4f} "
             f"area={duplicate.metrics.area:.4f} blocks={duplicate.metrics.block_ratio:.4f}"
         )
@@ -1613,9 +1613,9 @@ class SlideCaptureEngine:
 
     def run(self) -> None:
         started_at = time.monotonic()
-        print("[start] Ctrl+C 로 종료합니다.")
+        print("[start] Press Ctrl+C to stop.")
         if self.show_preview:
-            print("[preview] 미리보기 창에서 q / Q / Esc 를 누르거나 창을 닫으면 종료됩니다.")
+            print("[preview] Press q / Q / Esc in the preview window, or close the window, to stop.")
 
         try:
             while not self.stopper.stop:
@@ -1624,14 +1624,14 @@ class SlideCaptureEngine:
                     self.previous = None
                     self._needs_resync_after_wait = True
                     if not self._pause_logged:
-                        print("[pause] 캡처를 일시정지했습니다.")
+                        print("[pause] Capture paused.")
                         self._pause_logged = True
                     if self._sleep_with_preview_events(self.config.sample_interval):
                         break
                     continue
 
                 if self._pause_logged:
-                    print("[pause] 캡처를 다시 시작합니다.")
+                    print("[pause] Capture resumed.")
                     self._pause_logged = False
 
                 loop_started = time.monotonic()
@@ -1717,9 +1717,9 @@ class SlideCaptureEngine:
         if self.make_pdf:
             self._make_pdf()
 
-        print(f"[done] 총 {self.capture_count}장 저장")
+        print(f"[done] Saved {self.capture_count} slides.")
         if self.duplicate_skip_count:
-            print(f"[done] 중복 {self.duplicate_skip_count}장은 저장하지 않았습니다.")
+            print(f"[done] Skipped {self.duplicate_skip_count} duplicate slides.")
         print(f"[output] {self.output_dir}")
 
     def _build_pdf_page_paths(self) -> List[Path]:
@@ -1735,7 +1735,7 @@ class SlideCaptureEngine:
         for path in self.saved_paths:
             frame_bgr = cv2.imread(str(path))
             if frame_bgr is None:
-                print(f"[pdf] 이미지를 다시 읽지 못해 제외합니다: {path.name}")
+                print(f"[pdf] Excluding image because it could not be read again: {path.name}")
                 continue
 
             rep = self.preprocess(frame_bgr)
@@ -1743,7 +1743,7 @@ class SlideCaptureEngine:
             if duplicate is not None:
                 removed_count += 1
                 print(
-                    "[pdf] 중복 페이지 제외: "
+                    "[pdf] Excluding duplicate page: "
                     f"drop={path.name} keep={duplicate.record.path.name} "
                     f"ssim={duplicate.metrics.ssim:.4f} area={duplicate.metrics.area:.4f}"
                 )
@@ -1761,37 +1761,37 @@ class SlideCaptureEngine:
             )
 
         if removed_count:
-            print(f"[pdf] 중복 {removed_count}장을 제외하고 {len(unique_paths)}장으로 PDF를 만듭니다.")
+            print(f"[pdf] Creating PDF with {len(unique_paths)} pages after excluding {removed_count} duplicates.")
         return unique_paths
 
     def _make_pdf(self) -> None:
         pdf_page_paths = self._build_pdf_page_paths()
         if not pdf_page_paths:
-            print("[pdf] 저장된 이미지가 없어서 PDF를 만들지 않았습니다.")
+            print("[pdf] No saved images; PDF was not created.")
             return
 
         pdf_path = self.output_dir / "slides.pdf"
         if img2pdf is not None:
             with pdf_path.open("wb") as f:
                 f.write(img2pdf.convert([str(path) for path in pdf_page_paths]))
-            print(f"[pdf] {pdf_path.name} 생성 완료 (img2pdf / 무손실 경로, {len(pdf_page_paths)}장)")
+            print(f"[pdf] Created {pdf_path.name} (img2pdf/lossless path, {len(pdf_page_paths)} pages).")
             return
 
         if Image is None:
             print(
-                "[pdf] img2pdf 와 Pillow 가 없어 PDF 생성을 건너뜁니다. "
-                "pip install img2pdf pillow 후 다시 실행하세요."
+                "[pdf] Skipping PDF creation because img2pdf and Pillow are unavailable. "
+                "Run pip install img2pdf pillow, then try again."
             )
             return
 
-        print("[pdf] img2pdf 가 없어 Pillow 로 대체합니다. 이 경로는 PDF 내부에서 JPEG 재인코딩이 일어날 수 있습니다.")
+        print("[pdf] img2pdf is unavailable; falling back to Pillow. This path may re-encode images as JPEG inside the PDF.")
         images = []
         for path in pdf_page_paths:
             img = Image.open(path).convert("RGB")
             images.append(img)
         head, *tail = images
         head.save(pdf_path, save_all=True, append_images=tail)
-        print(f"[pdf] {pdf_path.name} 생성 완료 (Pillow 대체 경로, {len(pdf_page_paths)}장)")
+        print(f"[pdf] Created {pdf_path.name} (Pillow fallback path, {len(pdf_page_paths)} pages).")
 
 
 def dict_get(mapping: Dict[str, Any], *keys: Any, default: Any = None) -> Any:
@@ -1829,7 +1829,7 @@ def select_roi_on_image(image_bgr: np.ndarray, window_name: str) -> Tuple[int, i
         cv2.destroyAllWindows()
 
     if roi_w <= 0 or roi_h <= 0:
-        raise RuntimeError("영역 선택이 취소되었습니다.")
+        raise RuntimeError("Region selection was cancelled.")
 
     if scale < 1.0:
         x = int(round(x / scale))
@@ -1857,7 +1857,7 @@ def grab_full_desktop() -> Tuple[np.ndarray, Dict[str, int]]:
 
 def select_screen_region_interactively() -> Dict[str, int]:
     screen_bgr, monitor = grab_full_desktop()
-    window_name = "영역 선택: 강의 영상 부분만 드래그 후 Enter / Space, 취소는 c"
+    window_name = "Region Selection: drag over the lecture video area, Enter/Space to confirm, c to cancel"
     x, y, w, h = select_roi_on_image(screen_bgr, window_name)
     return {
         "left": int(monitor["left"] + x),
@@ -1870,14 +1870,14 @@ def select_screen_region_interactively() -> Dict[str, int]:
 def parse_roi(roi_text: str) -> Dict[str, int]:
     parts = [p.strip() for p in roi_text.split(",")]
     if len(parts) != 4:
-        raise argparse.ArgumentTypeError("--roi 는 left,top,width,height 형식이어야 합니다.")
+        raise argparse.ArgumentTypeError("--roi must use the left,top,width,height format.")
     try:
         left, top, width, height = map(int, parts)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("--roi 값은 정수여야 합니다.") from exc
+        raise argparse.ArgumentTypeError("--roi values must be integers.") from exc
 
     if width <= 0 or height <= 0:
-        raise argparse.ArgumentTypeError("width 와 height 는 1 이상이어야 합니다.")
+        raise argparse.ArgumentTypeError("width and height must be at least 1.")
     return {"left": left, "top": top, "width": width, "height": height}
 
 
@@ -1890,7 +1890,7 @@ def spin_cocoa_runloop(done: threading.Event, timeout: float, context: str) -> N
     deadline = time.monotonic() + timeout
     while not done.is_set():
         if time.monotonic() >= deadline:
-            raise TimeoutError(f"{context} 응답 대기 시간이 초과되었습니다.")
+            raise TimeoutError(f"Timed out waiting for {context}.")
         if NSRunLoop is not None and NSDate is not None:
             NSRunLoop.currentRunLoop().runUntilDate_(NSDate.dateWithTimeIntervalSinceNow_(0.05))
         else:
@@ -1899,7 +1899,7 @@ def spin_cocoa_runloop(done: threading.Event, timeout: float, context: str) -> N
 
 def fetch_shareable_content(on_screen_windows_only: bool) -> Any:
     if ScreenCaptureKit is None:
-        raise CaptureUnavailableError("ScreenCaptureKit 이 설치되어 있지 않습니다.")
+        raise CaptureUnavailableError("ScreenCaptureKit is not installed.")
 
     result: Dict[str, Any] = {}
     done = threading.Event()
@@ -1918,10 +1918,10 @@ def fetch_shareable_content(on_screen_windows_only: bool) -> Any:
 
     error = result.get("error")
     if error is not None:
-        raise CaptureUnavailableError(f"SCShareableContent 오류: {error}")
+        raise CaptureUnavailableError(f"SCShareableContent error: {error}")
     content = result.get("content")
     if content is None:
-        raise CaptureUnavailableError("SCShareableContent 가 비어 있습니다.")
+        raise CaptureUnavailableError("SCShareableContent is empty.")
     return content
 
 
@@ -1936,7 +1936,7 @@ def get_objc_property(obj: Any, name: str) -> Any:
             pass
     if hasattr(obj, "valueForKey_"):
         return obj.valueForKey_(name)
-    raise AttributeError(f"{type(obj).__name__} 에서 Objective-C 속성 {name!r} 를 찾지 못했습니다.")
+    raise AttributeError(f"Could not find Objective-C property {name!r} on {type(obj).__name__}.")
 
 
 def unwrap_objc_rect_value(rect_like: Any) -> Any:
@@ -1982,7 +1982,7 @@ def cgsize_width_height(size_like: Any) -> Tuple[float, float]:
     if len(numbers) >= 2:
         return float(numbers[-2]), float(numbers[-1])
 
-    raise RuntimeError(f"CGSize 크기를 해석하지 못했습니다: {size_like!r}")
+    raise RuntimeError(f"Could not interpret CGSize: {size_like!r}")
 
 
 def cgrect_width_height(rect: Any) -> Tuple[float, float]:
@@ -2032,23 +2032,23 @@ def cgrect_width_height(rect: Any) -> Tuple[float, float]:
     if len(numbers) >= 4:
         return float(numbers[-2]), float(numbers[-1])
 
-    raise RuntimeError(f"CGRect 크기를 해석하지 못했습니다: {rect!r}")
+    raise RuntimeError(f"Could not interpret CGRect: {rect!r}")
 
 
 # PNG serialization via NSBitmapImageRep avoids hard-coding the CGImage's underlying pixel byte order.
 def cgimage_to_bgr(image: Any) -> np.ndarray:
     if AppKit is None:
-        raise RuntimeError("macOS CGImage 변환에는 pyobjc-framework-Cocoa 가 필요합니다.")
+        raise RuntimeError("macOS CGImage conversion requires pyobjc-framework-Cocoa.")
 
     rep = AppKit.NSBitmapImageRep.alloc().initWithCGImage_(image)
     png_data = rep.representationUsingType_properties_(AppKit.NSPNGFileType, None)
     if png_data is None:
-        raise RuntimeError("CGImage 를 PNG 로 직렬화하지 못했습니다.")
+        raise RuntimeError("Could not serialize CGImage to PNG.")
     encoded = bytes(png_data)
     arr = np.frombuffer(encoded, dtype=np.uint8)
     decoded = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if decoded is None:
-        raise RuntimeError("PNG 디코딩에 실패했습니다.")
+        raise RuntimeError("PNG decoding failed.")
     return decoded
 
 
@@ -2102,7 +2102,7 @@ def _list_candidate_windows_win32(owner_filter: Optional[str], title_filter: Opt
 
         user32.EnumWindows(enum_proc, 0)
     except Exception as exc:
-        raise RuntimeError(f"Windows 창 목록 조회에 실패했습니다: {exc}") from exc
+        raise RuntimeError(f"Failed to list Windows windows: {exc}") from exc
 
     windows.sort(key=lambda item: item["area"], reverse=True)
     return windows
@@ -2113,7 +2113,7 @@ def list_candidate_windows(owner_filter: Optional[str], title_filter: Optional[s
         return _list_candidate_windows_win32(owner_filter, title_filter)
 
     if Quartz is None:
-        raise RuntimeError("창 목록 조회에는 pyobjc-framework-Quartz 가 필요합니다.")
+        raise RuntimeError("Listing windows requires pyobjc-framework-Quartz.")
 
     info_list = Quartz.CGWindowListCopyWindowInfo(
         Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
@@ -2177,12 +2177,12 @@ def list_candidate_windows(owner_filter: Optional[str], title_filter: Optional[s
 
 def print_candidate_windows(windows: List[Dict[str, Any]]) -> None:
     if not windows:
-        print("[windows] 표시 가능한 창을 찾지 못했습니다.")
+        print("[windows] No visible windows found.")
         return
 
-    print("[windows] 후보 창 목록")
+    print("[windows] Candidate windows")
     for idx, item in enumerate(windows, start=1):
-        title = item["window_title"] or "(제목 없음)"
+        title = item["window_title"] or "(Untitled)"
         print(
             f"  {idx:02d}. id={item['window_id']}  owner={item['window_owner']}  "
             f"size={item['width']}x{item['height']}  title={title}"
@@ -2199,13 +2199,13 @@ def choose_target_window_interactively(
             candidates = list_candidate_windows("Chrome", title_filter)
         if not candidates:
             raise RuntimeError(
-                "선택할 창을 찾지 못했습니다. 강의 창을 화면에 띄운 뒤 다시 시도하세요."
+                "Could not find a selectable window. Bring the lecture window onscreen and try again."
             )
 
         print_candidate_windows(candidates)
-        print("[windows] 번호를 입력하세요. Enter=1번, r=새로고침, q=취소")
+        print("[windows] Enter a number. Enter=first, r=refresh, q=cancel")
         try:
-            answer = input("> 선택: ").strip()
+            answer = input("> Select: ").strip()
         except EOFError:
             answer = ""
 
@@ -2213,7 +2213,7 @@ def choose_target_window_interactively(
             return candidates[0]
         lowered = answer.lower()
         if lowered in {"q", "quit", "exit"}:
-            raise RuntimeError("창 선택이 취소되었습니다.")
+            raise RuntimeError("Window selection was cancelled.")
         if lowered in {"r", "refresh", "reload"}:
             print()
             continue
@@ -2221,7 +2221,7 @@ def choose_target_window_interactively(
         try:
             number = int(answer)
         except ValueError:
-            print("[windows] 숫자 번호를 입력해 주세요.\n")
+            print("[windows] Enter a numeric window number.\n")
             continue
 
         if 1 <= number <= len(candidates):
@@ -2231,7 +2231,7 @@ def choose_target_window_interactively(
             if int(item["window_id"]) == number:
                 return item
 
-        print("[windows] 범위를 벗어난 번호입니다.\n")
+        print("[windows] Number is out of range.\n")
 
 
 def create_window_source(
@@ -2258,7 +2258,7 @@ def create_window_source(
             backend=backend,
             pause_on_cursor_in_roi=pause_on_cursor_in_roi,
         )
-    raise RuntimeError("이 플랫폼에서는 창 고정 캡처를 지원하지 않습니다. screen 모드를 사용하세요.")
+    raise RuntimeError("Window capture is not supported on this platform. Use screen mode.")
 
 
 # Build the capture source using a native window backend when available, with screen ROI mode as fallback.
@@ -2267,7 +2267,7 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
 
     if capture_source_mode == "window":
         if not WINDOW_CAPTURE_SUPPORTED:
-            raise RuntimeError("window 모드를 사용할 수 없습니다. screen 모드로 화면 영역을 직접 지정하세요.")
+            raise RuntimeError("Window mode is unavailable. Use screen mode and select a screen region directly.")
 
         owner_filter = normalize_optional_string(args.window_owner)
         title_filter = normalize_optional_string(args.window_title)
@@ -2291,13 +2291,13 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
         )
         print(
             f"[window] id={chosen_window['window_id']} owner={chosen_window['window_owner']} "
-            f"title={chosen_window['window_title'] or '(제목 없음)'} backend={getattr(source, 'backend', 'auto')}"
+            f"title={chosen_window['window_title'] or '(Untitled)'} backend={getattr(source, 'backend', 'auto')}"
         )
-        print("[roi] 선택한 창 스냅샷에서 강의 슬라이드 부분만 선택하세요.")
+        print("[roi] Select only the lecture slide area in the selected window snapshot.")
         preview = source.selection_preview()
         x, y, w, h = select_roi_on_image(
             preview,
-            "창 내부 영역 선택: 슬라이드 부분만 드래그 후 Enter / Space, 취소는 c",
+            "Window Region Selection: drag over the slide area, Enter/Space to confirm, c to cancel",
         )
         ph, pw = preview.shape[:2]
         source.set_roi_from_pixels(x, y, w, h, pw, ph)
@@ -2305,14 +2305,14 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
         return source
 
     if args.list_windows:
-        # screen 모드에서 --list-windows 가 들어와도 사용자가 혼동하지 않도록 안내.
-        print("[windows] screen 모드에서는 창 목록을 사용하지 않습니다. --capture-source window 와 함께 사용하세요.")
+        # Keep users from confusing --list-windows with screen mode.
+        print("[windows] Screen mode does not use the window list. Use it with --capture-source window.")
         raise SystemExit(0)
 
     if args.roi is not None:
         region = args.roi
     else:
-        print("[roi] Chrome 창을 화면에 띄운 상태에서 강의 슬라이드 영역만 선택하세요.")
+        print("[roi] Keep the Chrome window visible and select only the lecture slide area.")
         region = select_screen_region_interactively()
 
     source = ScreenRegionSource(
@@ -2327,7 +2327,7 @@ def build_capture_source(args: argparse.Namespace, output_dir: Path) -> CaptureS
 def resolve_capture_source_mode(requested: str) -> str:
     requested = requested.lower()
     if requested not in {"auto", "window", "screen"}:
-        raise RuntimeError(f"지원하지 않는 캡처 소스입니다: {requested}")
+        raise RuntimeError(f"Unsupported capture source: {requested}")
 
     if requested == "screen":
         return "screen"
@@ -2367,8 +2367,8 @@ def resolve_target_window(
         if 1 <= explicit_window_id <= len(filtered_candidates):
             chosen = filtered_candidates[explicit_window_id - 1]
             print(
-                f"[window] 입력값 {explicit_window_id} 을(를) 후보 번호로 해석해 "
-                f"창 ID {chosen['window_id']} 를 선택합니다."
+                f"[window] Interpreting input {explicit_window_id} as a candidate number "
+                f"and selecting window ID {chosen['window_id']}."
             )
             return chosen
 
@@ -2392,8 +2392,8 @@ def resolve_target_window(
         candidates = list_candidate_windows("Chrome", title_filter)
     if not candidates:
         raise RuntimeError(
-            "대상 창을 찾지 못했습니다. 강의 창을 화면에 띄운 뒤 다시 실행하거나, "
-            "--list-windows 로 후보를 확인한 다음 --window-id 로 지정하세요."
+            "Could not find the target window. Bring the lecture window onscreen and run again, "
+            "or inspect candidates with --list-windows and pass one with --window-id."
         )
     return candidates[0]
 
@@ -2401,30 +2401,30 @@ def resolve_target_window(
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "강의 영상의 슬라이드가 바뀌는 시점만 자동 저장합니다. "
-            "macOS/Windows 에서는 기본적으로 Chrome 창 자체를 고정 캡처하려고 시도하고, "
-            "그 외 환경에서는 화면 ROI 방식으로 동작합니다."
+            "Automatically saves only the moments when lecture slides change. "
+            "On macOS/Windows it tries native Chrome window capture by default; "
+            "otherwise it uses screen ROI capture."
         )
     )
     parser.add_argument(
         "--output",
         type=Path,
         default=Path("captures"),
-        help="저장 폴더 (기본값: ./captures)",
+        help="Output folder (default: ./captures)",
     )
     parser.add_argument(
         "--interval",
         type=float,
         default=0.60,
-        help="샘플링 간격(초). 기본값: 0.60",
+        help="Sampling interval in seconds (default: 0.60)",
     )
     parser.add_argument(
         "--mode",
         choices=["slide", "detailed"],
         default="slide",
         help=(
-            "slide=기본. 손글씨/포인터를 강하게 무시하고 큰 화면 전환 위주로 저장. "
-            "detailed=작은 변경도 더 잘 잡지만 오탐이 늘 수 있음."
+            "slide=default; strongly ignores handwriting/pointer changes and saves major transitions. "
+            "detailed=catches smaller changes but may produce more false positives."
         ),
     )
     parser.add_argument(
@@ -2432,8 +2432,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=["auto", "window", "screen"],
         default="auto",
         help=(
-            "auto=가능하면 창 고정 캡처 우선, 그 외는 화면 ROI. "
-            "window=네이티브 창 고정 캡처 강제. screen=화면 ROI 방식 강제."
+            "auto=prefer native window capture when available, otherwise screen ROI. "
+            "window=force native window capture. screen=force screen ROI capture."
         ),
     )
     parser.add_argument(
@@ -2441,61 +2441,61 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=["auto", "screencapturekit", "coregraphics", "win32-mss"],
         default="auto",
         help=(
-            "window 모드에서 사용할 내부 백엔드. "
+            "Internal backend for window mode. "
             "macOS: ScreenCaptureKit/CoreGraphics, Windows: win32-mss."
         ),
     )
     parser.add_argument(
         "--window-owner",
         default="Google Chrome",
-        help="macOS window 모드에서 앱 이름 필터. 기본값: Google Chrome",
+        help="App-name filter for window mode (default: Google Chrome)",
     )
     parser.add_argument(
         "--window-title",
         default=None,
-        help="macOS window 모드에서 창 제목 부분 문자열 필터",
+        help="Window-title substring filter for window mode",
     )
     parser.add_argument(
         "--window-id",
         type=int,
         default=None,
-        help="macOS window 모드에서 대상 창 ID 직접 지정. 후보 목록 번호(1, 2, 3...)도 허용",
+        help="Target window ID for window mode. Candidate list numbers (1, 2, 3...) are also accepted",
     )
     parser.add_argument(
         "--choose-window",
         action="store_true",
-        help="macOS window 모드에서 캡처 시작 전에 현재 창 목록을 보여주고 번호로 선택",
+        help="Show current windows before capture and choose by number",
     )
     parser.add_argument(
         "--list-windows",
         action="store_true",
-        help="macOS 에서 현재 보이는 창 후보를 출력하고 종료",
+        help="Print currently visible window candidates and exit",
     )
     parser.add_argument(
         "--roi",
         type=parse_roi,
         default=None,
-        help="screen 모드에서 캡처 영역 직접 지정: left,top,width,height",
+        help="Directly specify the capture region in screen mode: left,top,width,height",
     )
     parser.add_argument(
         "--no-pause-on-cursor-in-roi",
         action="store_true",
-        help="ROI 안에 마우스 커서가 들어와도 캡처를 일시정지하지 않음",
+        help="Do not pause capture when the mouse cursor is inside the ROI",
     )
     parser.add_argument(
         "--preview",
         action="store_true",
-        help="실시간 미리보기 창 표시",
+        help="Show the live preview window",
     )
     parser.add_argument(
         "--make-pdf",
         action="store_true",
-        help="종료 시 저장된 이미지들을 slides.pdf 로 묶음 (img2pdf 권장)",
+        help="Bundle saved images into slides.pdf on exit (img2pdf recommended)",
     )
     parser.add_argument(
         "--keep-duplicate-slides",
         action="store_true",
-        help="반복 등장한 동일 슬라이드도 저장/ PDF 에 그대로 유지함 (기본값은 중복 제거)",
+        help="Keep repeated identical slides in saved images and the PDF (default removes duplicates)",
     )
     return parser
 
@@ -2510,7 +2510,7 @@ def main() -> None:
 
     capture_source = build_capture_source(args, output_dir)
     if not args.no_pause_on_cursor_in_roi:
-        print("[guard] 커서가 ROI 안에 들어오면 캡처를 일시정지합니다.")
+        print("[guard] Capture will pause when the cursor enters the ROI.")
 
     engine = SlideCaptureEngine(
         capture_source=capture_source,
