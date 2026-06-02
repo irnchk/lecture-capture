@@ -1,52 +1,123 @@
 # Lecture Slide Capture
 
-기본 GitHub README 페이지에서는 영어/한국어 내용을 같은 화면에서 펼쳐볼 수 있습니다.
+강의 영상이나 브라우저 창을 지켜보다가 슬라이드가 바뀌는 순간만 로컬에 저장하고, 캡처된 슬라이드를 이미지와 `slides.pdf`로 정리하는 데스크톱 앱입니다.
 
-강의 영상을 재생하는 창을 기준으로 슬라이드가 바뀌는 시점만 자동 저장하는 앱입니다. 저장소에는 바로 실행 가능한 macOS 앱 번들과 Windows 배포용 빌드 구성이 함께 들어 있습니다.
+![Lecture Slide Capture GUI mockup](design/lecture-slide-capture-redesign-mockup.png)
 
-저장소 구성:
-- `Lecture Slide Capture.app`: 바로 실행 가능한 macOS 앱 번들
-- `Lecture Slide Capture.app/Contents/Resources/slide_capture_gui.py`: GUI 프론트엔드
-- `Lecture Slide Capture.app/Contents/Resources/slide_capture.py`: 핵심 캡처 스크립트
-- `Lecture Slide Capture.app/Contents/Resources/requirements.txt`: 자동 설치에 사용하는 Python 의존성 목록
-- `design/lecture-slide-capture-redesign-mockup.png`: GUI 재설계 참고 mockup
-- `packaging/windows/LectureSlideCapture.windows.spec`: Windows `.exe` 생성을 위한 PyInstaller spec
-- `scripts/build_windows.ps1`: Windows 로컬 빌드 스크립트
+## 왜 만들었나요
 
-주요 기능:
-- GUI에서 Chrome 강의 창 또는 화면 영역을 선택해 캡처
-- 슬라이드 영역 ROI 선택, 최근 저장 슬라이드, 저장 슬라이드 목록, 세션 로그 확인
-- 슬라이드 전환 시점만 감지해 이미지 저장
-- 종료 시 저장된 이미지들을 `slides.pdf`로 묶기
-- 기본 저장 경로 기억
-- 캡처 일시정지/재개와 안전한 종료
+강의 녹화는 길고 반복적인 경우가 많지만, 복습할 때 실제로 필요한 것은 전체 영상보다 슬라이드 상태인 경우가 많습니다. Lecture Slide Capture는 강의 창에서 슬라이드 전환을 감지해 의미 있는 프레임만 저장하고, 이를 복습하기 쉬운 PDF로 묶어 줍니다.
 
-실행 방법:
+이 앱은 개인정보와 로컬 작업 흐름을 우선합니다.
+
+- 사용자의 기기에서 실행됩니다.
+- 강의 영상이나 스크린샷을 서버로 업로드하지 않습니다.
+- 슬라이드 이미지, 로그, PDF는 로컬 세션 폴더에 저장됩니다.
+- 브라우저 창 또는 사용자가 직접 지정한 화면 영역을 캡처할 수 있습니다.
+
+## 이런 사용자에게 유용합니다
+
+- 온라인 강의를 복습하며 슬라이드를 일일이 캡처하고 싶지 않은 학생.
+- 녹화된 강의에서 빠르게 슬라이드 스냅샷을 얻고 싶은 강의자와 조교.
+- 로컬 우선 노트 정리 및 강의 처리 워크플로를 만드는 연구자.
+- 시각 자료를 PDF 형태로 압축해 보고 싶은 접근성 중심 사용자.
+
+## 주요 기능
+
+- GUI에서 Chrome 강의 창 또는 화면 영역 선택.
+- 슬라이드 ROI 지정으로 브라우저 UI, 자막, 조작 버튼 제외.
+- 슬라이드 전환 시점만 감지해 이미지 저장.
+- 캡처 중 최근 저장 슬라이드와 저장 목록 확인.
+- 세션 종료 시 `slides.pdf` 생성.
+- 캡처 일시정지, 재개, 안전한 종료.
+- 기본 저장 위치 기억.
+- 실행 가능한 macOS `.app` 번들과 Windows 빌드 파일 포함.
+
+## 빠른 시작
+
+### macOS
+
 1. `Lecture Slide Capture.app`를 실행합니다.
-2. 처음 실행 시 필요한 Python 패키지가 없으면 안내되는 설치 명령을 실행합니다.
-3. GUI에서 캡처할 창 또는 화면 영역을 선택하고 슬라이드 영역을 지정합니다.
-4. `Start Capture`를 누르면 세션 폴더 안에 캡처 이미지와 PDF가 저장됩니다.
+2. Python 패키지가 없으면 앱이 안내하는 설치 명령을 실행합니다.
+3. Chrome 강의 창 또는 화면 영역을 선택합니다.
+4. 슬라이드 영역을 지정합니다.
+5. `Start Capture`를 누릅니다.
+6. 완료 후 `Finish`를 눌러 `slides.pdf`를 생성합니다.
 
-Windows 배포 빌드:
-1. Windows PC에서 빌드하거나 GitHub Actions의 `Build Windows` workflow를 수동 실행합니다. PyInstaller는 macOS에서 Windows exe를 교차 빌드하지 못합니다.
-2. PowerShell에서 `.\scripts\build_windows.ps1`를 실행합니다.
-3. 결과물은 `dist\LectureSlideCapture.exe`로 생성됩니다.
+macOS에서는 화면 기록 권한이 필요할 수 있습니다. 캡처 화면이 비어 있다면 시스템 설정에서 권한을 허용하고 앱을 다시 실행해 주세요.
 
-기본 저장 위치:
-- macOS/소스 실행 기본값은 `/Users/irnchk/.hermes/workspace/NoteSources`
-- Windows 패키지 기본값은 `%USERPROFILE%\Documents\Lecture Slide Capture`
-- 실행할 때마다 타임스탬프 하위 폴더가 자동 생성됩니다.
+### Windows
 
-권한 안내:
-- macOS의 화면 기록 권한이 필요할 수 있습니다.
-- Chrome 창 고정 캡처가 불가능한 환경에서는 내부 로직에 따라 대체 방식으로 동작할 수 있습니다.
-- Windows 창 고정 캡처는 보이는 창 영역을 따라갑니다. 강의 창을 최소화하거나 다른 창으로 가리지 않는 것이 좋습니다.
+Windows PC에서 빌드하거나 GitHub Actions의 `Build Windows` workflow를 실행합니다. PyInstaller는 macOS에서 Windows 실행 파일을 교차 빌드하지 못합니다.
 
-확인한 내용:
-- `slide_capture.py`와 `slide_capture_gui.py`는 `python3 -m py_compile`로 문법 검사를 통과했습니다.
-- 실행 스크립트 `run_capture_terminal.command`, `run_capture_in_terminal.sh`는 `bash -n` 검사를 통과했습니다.
-- 앱 런처는 사용 가능한 Python 런타임을 찾아 GUI를 직접 실행합니다.
+```powershell
+.\scripts\build_windows.ps1
+```
 
-주의:
-- 실제 캡처 동작은 운영체제 권한 상태와 현재 열려 있는 강의 창 상태에 영향을 받습니다.
-- 저장소에는 별도 빌드 시스템보다 실행 가능한 앱 번들을 그대로 포함합니다.
+결과 실행 파일은 아래 경로에 생성됩니다.
+
+```text
+dist\LectureSlideCapture.exe
+```
+
+## 출력
+
+각 실행은 선택한 기본 저장 위치 아래에 타임스탬프 세션 폴더를 만듭니다. 기본 저장 위치는 GUI에서 바꿀 수 있고 로컬에 저장됩니다.
+
+일반적인 세션 구성:
+
+```text
+slide_0001.png
+slide_0002.png
+slides.pdf
+captures.csv
+duplicates.csv
+capture_source.json
+```
+
+## 저장소 구성
+
+```text
+Lecture Slide Capture.app/
+  Contents/Resources/slide_capture_gui.py   GUI 프론트엔드
+  Contents/Resources/slide_capture.py       캡처 엔진
+  Contents/Resources/requirements.txt       Python 의존성
+design/
+  lecture-slide-capture-redesign-mockup.png GUI mockup
+packaging/windows/
+  LectureSlideCapture.windows.spec          PyInstaller spec
+scripts/
+  build_windows.ps1                         Windows 빌드 스크립트
+```
+
+## 검증
+
+현재 앱 번들은 아래 명령으로 확인했습니다.
+
+```sh
+python3 -m py_compile "Lecture Slide Capture.app/Contents/Resources/slide_capture_gui.py" \
+  "Lecture Slide Capture.app/Contents/Resources/slide_capture.py"
+bash -n "Lecture Slide Capture.app/Contents/Resources/run_capture_in_terminal.sh"
+```
+
+실제 캡처 동작은 운영체제 화면 기록 권한과 현재 열려 있는 강의 창 상태에 영향을 받습니다.
+
+## 로드맵
+
+- Windows 창 캡처 안정성과 패키징 문서 개선.
+- 슬라이드 전환 감지 회귀를 확인할 작은 샘플 fixture 추가.
+- 화면 기록 권한 누락 시 더 명확한 첫 실행 진단 제공.
+- Tkinter GUI의 키보드 조작과 접근성 개선.
+- macOS와 Windows용 다운로드 가능한 릴리즈 artifact 게시.
+
+## 기여하기
+
+이슈와 Pull Request를 환영합니다. 개발 방법, 개인정보 보호 원칙, 시작하기 좋은 기여 항목은 [CONTRIBUTING.md](./CONTRIBUTING.md)를 참고해 주세요.
+
+## 라이선스
+
+MIT. 자세한 내용은 [LICENSE](./LICENSE)를 확인해 주세요.
+
+## English
+
+For English documentation, see [README.md](./README.md).
