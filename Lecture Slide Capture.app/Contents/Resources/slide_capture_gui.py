@@ -33,6 +33,26 @@ else:
 REQ_PATH = RES_DIR / "requirements.txt"
 
 
+def _ui_font_families() -> Dict[str, str]:
+    """Pick clean, platform-native type families with graceful fallbacks."""
+    if sys.platform == "darwin":
+        return {"display": "SF Pro Display", "text": "SF Pro Text", "mono": "SF Mono"}
+    if sys.platform == "win32":
+        return {"display": "Segoe UI Semibold", "text": "Segoe UI", "mono": "Cascadia Mono"}
+    return {"display": "Inter", "text": "Inter", "mono": "DejaVu Sans Mono"}
+
+
+FONT = _ui_font_families()
+
+
+def ui_font(role: str = "text", size: int = 12, weight: str = "normal") -> tuple:
+    """Build a Tk font spec from the central type system (role + size + weight)."""
+    family = FONT.get(role, FONT["text"])
+    if weight == "bold":
+        return (family, size, "bold")
+    return (family, size)
+
+
 def platform_config_dir() -> Path:
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
@@ -366,7 +386,7 @@ def show_bootstrap_screen(root: tk.Tk, message: str) -> None:
         text="Lecture Slide Capture",
         bg="#f5f1e8",
         fg="#1f2937",
-        font=("Helvetica", 18, "bold"),
+        font=ui_font("display", 18, "bold"),
         anchor="w",
         justify="left",
     ).pack(fill="x", anchor="w")
@@ -376,7 +396,7 @@ def show_bootstrap_screen(root: tk.Tk, message: str) -> None:
         text=message,
         bg="#f5f1e8",
         fg="#4b5563",
-        font=("Helvetica", 12),
+        font=ui_font("text", 12),
         anchor="w",
         justify="left",
         wraplength=560,
@@ -401,7 +421,7 @@ def show_error_screen(root: tk.Tk, title: str, message: str, details: str) -> No
         text=title,
         bg="#f5f1e8",
         fg="#7f1d1d",
-        font=("Helvetica", 17, "bold"),
+        font=ui_font("display", 17, "bold"),
         anchor="w",
         justify="left",
     ).pack(fill="x", anchor="w")
@@ -411,7 +431,7 @@ def show_error_screen(root: tk.Tk, title: str, message: str, details: str) -> No
         text=message,
         bg="#f5f1e8",
         fg="#4b5563",
-        font=("Helvetica", 12),
+        font=ui_font("text", 12),
         anchor="w",
         justify="left",
         wraplength=760,
@@ -422,7 +442,7 @@ def show_error_screen(root: tk.Tk, title: str, message: str, details: str) -> No
         outer,
         wrap="word",
         height=18,
-        font=("Menlo", 11),
+        font=ui_font("mono", 11),
         background="#fffdf7",
         foreground="#111827",
     )
@@ -517,7 +537,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
         text="캡처에 필요한 Python 패키지가 아직 설치되지 않았습니다.",
         bg="#f5f1e8",
         fg="#1f2937",
-        font=("Helvetica", 15, "bold"),
+        font=ui_font("display", 15, "bold"),
         anchor="w",
         justify="left",
     ).pack(fill="x", anchor="w")
@@ -527,7 +547,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
         text=f"누락 항목: {missing_text}",
         bg="#f5f1e8",
         fg="#374151",
-        font=("Helvetica", 12),
+        font=ui_font("text", 12),
         anchor="w",
         justify="left",
         wraplength=720,
@@ -547,7 +567,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
         text=note_text,
         bg="#f5f1e8",
         fg="#4b5563",
-        font=("Helvetica", 12),
+        font=ui_font("text", 12),
         anchor="w",
         justify="left",
         wraplength=720,
@@ -563,7 +583,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
         borderwidth=1,
         padx=10,
         pady=10,
-        font=("Menlo", 11),
+        font=ui_font("mono", 11),
     )
     command_box.pack(fill="x", expand=False, pady=(14, 0))
     command_box.insert("1.0", install_command)
@@ -575,7 +595,7 @@ def show_install_screen(root: tk.Tk, missing_text: str, install_command: str, cl
         text="1. Terminal 열기  2. 명령 실행  3. 설치 완료 후 앱 다시 실행",
         bg="#f5f1e8",
         fg="#6b7280",
-        font=("Helvetica", 11),
+        font=ui_font("text", 11),
         anchor="w",
         justify="left",
         pady=12,
@@ -935,11 +955,15 @@ class CaptureApp:
             "panel": "#fffefa",
             "panel_alt": "#f8f6f1",
             "border": "#ded8cd",
+            "divider": "#ece6da",
             "text": "#1f2937",
             "muted": "#667085",
+            "faint": "#98a1b0",
             "accent": "#d97706",
+            "accent_hover": "#ea8a0c",
             "accent_light": "#fff7ed",
             "accent_dark": "#92400e",
+            "track": "#f1ece1",
             "success": "#15803d",
             "info": "#2563eb",
             "danger": "#b91c1c",
@@ -952,19 +976,23 @@ class CaptureApp:
         self.root.configure(background=self.palette["bg"])
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+        body_font = ui_font("text", 12)
+        muted = self.palette["muted"]
+
         style = ttk.Style(self.root)
         try:
             style.theme_use("clam")
         except Exception:
             pass
-        style.configure(".", font=("SF Pro Text", 12), background=self.palette["bg"], foreground=self.palette["text"])
+        style.configure(".", font=body_font, background=self.palette["bg"], foreground=self.palette["text"])
         style.configure("Root.TFrame", background=self.palette["bg"])
         style.configure("Panel.TFrame", background=self.palette["panel"])
         style.configure("Soft.TFrame", background=self.palette["panel_alt"])
-        style.configure("Header.TLabel", font=("SF Pro Display", 25, "bold"), foreground=self.palette["text"], background=self.palette["bg"])
-        style.configure("Subheader.TLabel", foreground=self.palette["muted"], background=self.palette["bg"])
-        style.configure("PanelSubheader.TLabel", foreground=self.palette["muted"], background=self.palette["panel"])
-        style.configure("Muted.TLabel", foreground=self.palette["muted"])
+        style.configure("Header.TLabel", font=ui_font("display", 26, "bold"), foreground=self.palette["text"], background=self.palette["bg"])
+        style.configure("Eyebrow.TLabel", font=ui_font("text", 10, "bold"), foreground=self.palette["faint"], background=self.palette["bg"])
+        style.configure("Subheader.TLabel", font=ui_font("text", 12), foreground=muted, background=self.palette["bg"])
+        style.configure("PanelSubheader.TLabel", font=ui_font("text", 11), foreground=muted, background=self.palette["panel"])
+        style.configure("Muted.TLabel", font=ui_font("text", 11), foreground=muted)
         style.configure(
             "Step.TLabelframe",
             background=self.palette["panel"],
@@ -973,7 +1001,7 @@ class CaptureApp:
         )
         style.configure(
             "Step.TLabelframe.Label",
-            font=("SF Pro Display", 14, "bold"),
+            font=ui_font("display", 14, "bold"),
             foreground=self.palette["text"],
             background=self.palette["bg"],
         )
@@ -985,19 +1013,74 @@ class CaptureApp:
         )
         style.configure(
             "Section.TLabelframe.Label",
-            font=("SF Pro Text", 12, "bold"),
+            font=ui_font("text", 12, "bold"),
             foreground=self.palette["text"],
             background=self.palette["bg"],
         )
-        style.configure("TLabel", background=self.palette["panel"], foreground=self.palette["text"])
-        style.configure("TRadiobutton", background=self.palette["panel"], foreground=self.palette["text"])
-        style.configure("TCheckbutton", background=self.palette["panel"], foreground=self.palette["text"])
-        style.configure("TEntry", fieldbackground="#ffffff")
-        style.configure("TCombobox", fieldbackground="#ffffff")
-        style.configure("Ghost.TButton", padding=(12, 6))
-        style.configure("Accent.TButton", font=("SF Pro Text", 12, "bold"), foreground="#ffffff", background=self.palette["accent"])
-        style.map("Accent.TButton", background=[("active", "#f59e0b"), ("disabled", "#e5e7eb")], foreground=[("disabled", "#9ca3af")])
-        style.configure("Danger.TButton", foreground=self.palette["danger"])
+        style.configure("TLabel", background=self.palette["panel"], foreground=self.palette["text"], font=body_font)
+        style.configure("TRadiobutton", background=self.palette["panel"], foreground=self.palette["text"], font=body_font)
+        style.configure("TCheckbutton", background=self.palette["panel"], foreground=self.palette["text"], font=body_font)
+        style.map("TCheckbutton", foreground=[("disabled", self.palette["faint"])])
+        style.configure(
+            "TEntry",
+            fieldbackground="#ffffff",
+            bordercolor=self.palette["border"],
+            lightcolor=self.palette["border"],
+            darkcolor=self.palette["border"],
+            borderwidth=1,
+            padding=(8, 6),
+        )
+        style.map(
+            "TEntry",
+            bordercolor=[("focus", self.palette["accent"])],
+            lightcolor=[("focus", self.palette["accent"])],
+            darkcolor=[("focus", self.palette["accent"])],
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground="#ffffff",
+            bordercolor=self.palette["border"],
+            borderwidth=1,
+            padding=(8, 5),
+            arrowsize=14,
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", "#ffffff")],
+            bordercolor=[("focus", self.palette["accent"])],
+        )
+        style.configure(
+            "TButton",
+            font=body_font,
+            padding=(14, 8),
+            background=self.palette["panel_alt"],
+            foreground=self.palette["text"],
+            bordercolor=self.palette["border"],
+            focuscolor=self.palette["accent_light"],
+            relief="flat",
+        )
+        style.map(
+            "TButton",
+            background=[("active", "#efe8db"), ("pressed", "#e7e0d2"), ("disabled", "#f3f0ea")],
+            foreground=[("disabled", self.palette["faint"])],
+        )
+        style.configure("Ghost.TButton", padding=(12, 7))
+        style.configure(
+            "Accent.TButton",
+            font=ui_font("text", 12, "bold"),
+            foreground="#ffffff",
+            background=self.palette["accent"],
+            bordercolor=self.palette["accent"],
+            padding=(18, 9),
+            relief="flat",
+        )
+        style.map(
+            "Accent.TButton",
+            background=[("active", self.palette["accent_hover"]), ("pressed", self.palette["accent_dark"]), ("disabled", "#e7e2d8")],
+            foreground=[("disabled", self.palette["faint"])],
+        )
+        style.configure("Danger.TButton", font=ui_font("text", 12, "bold"), foreground=self.palette["danger"], padding=(14, 8))
+        style.map("Danger.TButton", foreground=[("disabled", self.palette["faint"])])
 
     def _build_ui(self) -> None:
         shell = ttk.Frame(self.root, style="Root.TFrame")
@@ -1005,15 +1088,16 @@ class CaptureApp:
         shell.columnconfigure(0, weight=1)
         shell.rowconfigure(1, weight=1)
 
-        app_header = ttk.Frame(shell, padding=(22, 18, 22, 8), style="Root.TFrame")
+        app_header = ttk.Frame(shell, padding=(24, 20, 24, 10), style="Root.TFrame")
         app_header.grid(row=0, column=0, sticky="ew")
         app_header.columnconfigure(0, weight=1)
-        ttk.Label(app_header, text="Lecture Slide Capture", style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(app_header, text="LECTURE SLIDE CAPTURE", style="Eyebrow.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(app_header, text="슬라이드 캡처 스튜디오", style="Header.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
         ttk.Label(
             app_header,
             text="강의 창 선택부터 슬라이드 영역 지정, 자동 저장과 PDF 생성까지 한 화면에서 관리합니다.",
             style="Subheader.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=2, column=0, sticky="w", pady=(5, 0))
 
         scroll_host = ttk.Frame(shell, style="Root.TFrame")
         scroll_host.grid(row=1, column=0, sticky="nsew")
@@ -1071,17 +1155,17 @@ class CaptureApp:
             )
             card.grid(**grid_options)
             card.columnconfigure(0, weight=1)
-            card.rowconfigure(1, weight=1)
+            card.rowconfigure(2, weight=1)
 
             header_row = tk.Frame(card, bg=self.palette["panel"])
-            header_row.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 0))
+            header_row.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 12))
             header_row.columnconfigure(1, weight=1)
             if step_number:
                 badge = tk.Canvas(header_row, width=34, height=34, bg=self.palette["panel"], highlightthickness=0, bd=0)
                 badge.grid(row=0, column=0, rowspan=2, sticky="n", padx=(0, 10))
                 fill = accent or self.palette["accent"]
                 badge.create_oval(2, 2, 32, 32, fill=fill, outline=fill)
-                badge.create_text(17, 17, text=step_number, fill="#ffffff", font=("SF Pro Display", 15, "bold"))
+                badge.create_text(17, 17, text=step_number, fill="#ffffff", font=ui_font("display", 15, "bold"))
                 title_col = 1
             elif accent:
                 tk.Frame(header_row, width=4, height=24, bg=accent, bd=0).grid(row=0, column=0, sticky="ns", padx=(0, 8))
@@ -1094,7 +1178,7 @@ class CaptureApp:
                 text=title,
                 bg=self.palette["panel"],
                 fg=self.palette["text"],
-                font=("SF Pro Display", 14, "bold"),
+                font=ui_font("display", 15, "bold"),
                 anchor="w",
             ).grid(row=0, column=title_col, sticky="w")
             if subtitle:
@@ -1103,12 +1187,16 @@ class CaptureApp:
                     text=subtitle,
                     bg=self.palette["panel"],
                     fg=self.palette["muted"],
-                    font=("SF Pro Text", 11),
+                    font=ui_font("text", 11),
                     anchor="w",
-                ).grid(row=1, column=title_col, sticky="w", pady=(2, 0))
+                ).grid(row=1, column=title_col, sticky="w", pady=(3, 0))
+
+            tk.Frame(card, bg=self.palette["divider"], height=1, bd=0).grid(
+                row=1, column=0, sticky="ew", padx=16
+            )
 
             body = ttk.Frame(card, padding=padding, style="Panel.TFrame")
-            body.grid(row=1, column=0, sticky="nsew")
+            body.grid(row=2, column=0, sticky="nsew")
             body.columnconfigure(0, weight=1)
             return body
 
@@ -1124,42 +1212,57 @@ class CaptureApp:
         )
         source_group.columnconfigure(1, weight=1)
 
-        self.window_mode_button = tk.Radiobutton(
+        segmented = tk.Frame(
             source_group,
+            bg=self.palette["track"],
+            highlightthickness=1,
+            highlightbackground=self.palette["border"],
+            bd=0,
+        )
+        segmented.grid(row=0, column=0, columnspan=2, sticky="ew")
+        segmented.columnconfigure(0, weight=1, uniform="seg")
+        segmented.columnconfigure(1, weight=1, uniform="seg")
+
+        self.window_mode_button = tk.Radiobutton(
+            segmented,
             text="Chrome 창 고정 캡처",
             variable=self.source_mode_var,
             value="window",
             command=self._sync_source_mode_ui,
             indicatoron=False,
             bg=self.palette["accent_light"],
-            fg=self.palette["text"],
+            fg=self.palette["accent_dark"],
             activebackground=self.palette["accent_light"],
-            selectcolor="#ffffff",
-            relief="solid",
-            bd=1,
+            selectcolor=self.palette["accent_light"],
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
             padx=12,
-            pady=7,
+            pady=9,
             anchor="center",
+            font=ui_font("text", 12, "bold"),
         )
-        self.window_mode_button.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        self.window_mode_button.grid(row=0, column=0, sticky="nsew", padx=(3, 2), pady=3)
         self.screen_mode_button = tk.Radiobutton(
-            source_group,
+            segmented,
             text="화면 영역 직접 캡처",
             variable=self.source_mode_var,
             value="screen",
             command=self._sync_source_mode_ui,
             indicatoron=False,
-            bg="#ffffff",
-            fg=self.palette["text"],
-            activebackground="#f8fafc",
-            selectcolor="#ffffff",
-            relief="solid",
-            bd=1,
+            bg=self.palette["track"],
+            fg=self.palette["muted"],
+            activebackground=self.palette["track"],
+            selectcolor=self.palette["track"],
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
             padx=12,
-            pady=7,
+            pady=9,
             anchor="center",
+            font=ui_font("text", 12),
         )
-        self.screen_mode_button.grid(row=0, column=1, sticky="ew")
+        self.screen_mode_button.grid(row=0, column=1, sticky="nsew", padx=(2, 3), pady=3)
 
         ttk.Label(source_group, text="앱 이름 필터").grid(row=1, column=0, sticky="w", pady=(12, 0))
         self.owner_entry = ttk.Entry(source_group, textvariable=self.window_owner_var)
@@ -1187,7 +1290,7 @@ class CaptureApp:
             height=4,
             activestyle="dotbox",
             exportselection=False,
-            font=("SF Mono", 11),
+            font=ui_font("mono", 11),
             background="#ffffff",
             foreground=self.palette["text"],
             highlightthickness=1,
@@ -1272,33 +1375,30 @@ class CaptureApp:
                 highlightthickness=1,
                 bd=0,
             )
-            card.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 10, 0))
+            card.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 12, 0))
+            tk.Frame(card, bg=color, height=3, bd=0).pack(fill="x")
+            inner = tk.Frame(card, bg="#ffffff")
+            inner.pack(fill="both", expand=True, padx=14, pady=(11, 13))
             tk.Label(
-                card,
+                inner,
                 text=title,
                 bg="#ffffff",
                 fg=self.palette["muted"],
-                font=("SF Pro Text", 10, "bold"),
-                padx=12,
-                pady=3,
+                font=ui_font("text", 10, "bold"),
             ).pack(anchor="w")
             tk.Label(
-                card,
+                inner,
                 textvariable=variable,
                 bg="#ffffff",
                 fg=color,
-                font=("SF Pro Display", 22, "bold"),
-                padx=12,
-                pady=2,
-            ).pack(anchor="w")
+                font=ui_font("display", 26, "bold"),
+            ).pack(anchor="w", pady=(5, 2))
             tk.Label(
-                card,
+                inner,
                 text=detail,
                 bg="#ffffff",
-                fg=self.palette["muted"],
-                font=("SF Pro Text", 11),
-                padx=12,
-                pady=3,
+                fg=self.palette["faint"],
+                font=ui_font("text", 11),
             ).pack(anchor="w")
 
         metric_card(metrics_frame, 0, "상태", self.session_status_var, "준비되었습니다.", self.palette["info"])
@@ -1367,7 +1467,7 @@ class CaptureApp:
         self.log_text = scrolledtext.ScrolledText(
             logs_frame,
             wrap="word",
-            font=("SF Mono", 11),
+            font=ui_font("mono", 11),
             background=self.palette["log_bg"],
             foreground=self.palette["log_fg"],
             insertbackground=self.palette["text"],
@@ -1733,14 +1833,26 @@ class CaptureApp:
         self.backend_combo.configure(state=readonly_state)
         self.window_listbox.configure(state=state)
         if hasattr(self, "window_mode_button") and hasattr(self, "screen_mode_button"):
+            active_bg = self.palette["accent_light"]
+            active_fg = self.palette["accent_dark"]
+            idle_bg = self.palette["track"]
+            idle_fg = self.palette["muted"]
             self.window_mode_button.configure(state="normal" if self.window_mode_supported else "disabled")
+            window_active = window_controls_enabled
             self.window_mode_button.configure(
-                bg=self.palette["accent_light"] if window_controls_enabled else "#ffffff",
-                fg=self.palette["accent_dark"] if window_controls_enabled else self.palette["muted"],
+                bg=active_bg if window_active else idle_bg,
+                fg=active_fg if window_active else idle_fg,
+                activebackground=active_bg if window_active else idle_bg,
+                selectcolor=active_bg if window_active else idle_bg,
+                font=ui_font("text", 12, "bold") if window_active else ui_font("text", 12),
             )
+            screen_active = not is_window_mode
             self.screen_mode_button.configure(
-                bg=self.palette["accent_light"] if not is_window_mode else "#ffffff",
-                fg=self.palette["accent_dark"] if not is_window_mode else self.palette["text"],
+                bg=active_bg if screen_active else idle_bg,
+                fg=active_fg if screen_active else idle_fg,
+                activebackground=active_bg if screen_active else idle_bg,
+                selectcolor=active_bg if screen_active else idle_bg,
+                font=ui_font("text", 12, "bold") if screen_active else ui_font("text", 12),
             )
         self.pick_region_button.configure(text="슬라이드 영역 선택" if is_window_mode else "화면 영역 선택")
         self._update_selection_summary()
