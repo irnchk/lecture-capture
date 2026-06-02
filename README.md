@@ -2,7 +2,7 @@
 
 Local-first desktop app that watches a lecture video or browser window, saves only the moments when slides change, and exports the captured slides as images plus a `slides.pdf`.
 
-![Lecture Slide Capture GUI mockup](design/lecture-slide-capture-redesign-mockup.png)
+![Lecture Slide Capture app screenshot](design/lecture-slide-capture-app-screenshot.png)
 
 ## Why This Exists
 
@@ -83,7 +83,7 @@ Lecture Slide Capture.app/
   Contents/Resources/slide_capture.py       capture engine
   Contents/Resources/requirements.txt       Python dependencies
 design/
-  lecture-slide-capture-redesign-mockup.png GUI mockup
+  lecture-slide-capture-app-screenshot.png  App screenshot
 packaging/windows/
   LectureSlideCapture.windows.spec          PyInstaller spec
 scripts/

@@ -2,7 +2,7 @@
 
 강의 영상이나 브라우저 창을 지켜보다가 슬라이드가 바뀌는 순간만 로컬에 저장하고, 캡처된 슬라이드를 이미지와 `slides.pdf`로 정리하는 데스크톱 앱입니다.
 
-![Lecture Slide Capture GUI mockup](design/lecture-slide-capture-redesign-mockup.png)
+![Lecture Slide Capture app screenshot](design/lecture-slide-capture-app-screenshot.png)
 
 ## 왜 만들었나요
 
@@ -83,7 +83,7 @@ Lecture Slide Capture.app/
   Contents/Resources/slide_capture.py       캡처 엔진
   Contents/Resources/requirements.txt       Python 의존성
 design/
-  lecture-slide-capture-redesign-mockup.png GUI mockup
+  lecture-slide-capture-app-screenshot.png  실제 앱 스크린샷
 packaging/windows/
   LectureSlideCapture.windows.spec          PyInstaller spec
 scripts/
